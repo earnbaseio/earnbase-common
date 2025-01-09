@@ -1,0 +1,52 @@
+[project]
+name = "earnbase-common"
+version = "0.1.0"
+description = "Common utilities for Earnbase services"
+authors = [
+    {name = "Earnbase Team", email = "dev@earnbase.io"},
+]
+dependencies = [
+    "structlog>=23.2.0",
+    "pydantic>=2.5.2",
+    "pydantic-settings>=2.1.0",
+]
+requires-python = ">=3.9"
+readme = "README.md"
+license = {text = "MIT"}
+keywords = ["logging", "utilities", "microservices"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Logging",
+]
+
+[project.urls]
+Homepage = "https://github.com/earnbase/earnbase-common"
+Documentation = "https://github.com/earnbase/earnbase-common#readme"
+Repository = "https://github.com/earnbase/earnbase-common.git"
+Issues = "https://github.com/earnbase/earnbase-common/issues"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.23.2",
+    "pytest-cov>=4.1.0",
+]
+
+[tool.pdm.build]
+includes = ["earnbase_common"]
+package-dir = "."
+source-includes = ["README.md", "LICENSE"]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend" 
