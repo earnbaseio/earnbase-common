@@ -1,10 +1,10 @@
 """MongoDB database module."""
 
-from typing import Optional, Dict, Any, List
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pymongo.errors import PyMongoError
+from typing import Any, Dict, List, Optional
 
 from earnbase_common.logging import get_logger
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo.errors import PyMongoError
 
 logger = get_logger(__name__)
 
