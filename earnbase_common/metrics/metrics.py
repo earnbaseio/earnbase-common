@@ -1,8 +1,7 @@
 """Metrics module."""
 
-from prometheus_client import Counter, Gauge, Histogram
-
 from earnbase_common.logging import get_logger
+from prometheus_client import Counter, Gauge, Histogram
 
 logger = get_logger(__name__)
 

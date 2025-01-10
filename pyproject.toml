@@ -1,6 +1,6 @@
 [project]
 name = "earnbase-common"
-version = "0.1.1"
+version = "0.1.6"
 description = "Common utilities for Earnbase services"
 authors = [
     {name = "Earnbase Team", email = "dev@earnbase.io"},
@@ -30,10 +30,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/earnbase/earnbase-common"
-Documentation = "https://github.com/earnbase/earnbase-common#readme"
-Repository = "https://github.com/earnbase/earnbase-common.git"
-Issues = "https://github.com/earnbase/earnbase-common/issues"
+Homepage = "https://github.com/earnbaseio/earnbase-common"
+Documentation = "https://github.com/earnbaseio/earnbase-common#readme"
+Repository = "https://github.com/earnbaseio/earnbase-common.git"
+Issues = "https://github.com/earnbaseio/earnbase-common/issues"
 
 [tool.pdm]
 distribution = true

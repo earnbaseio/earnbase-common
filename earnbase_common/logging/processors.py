@@ -6,9 +6,7 @@ import structlog
 
 
 def add_service_info(
-    logger: structlog.BoundLogger,
-    name: str,
-    event_dict: Dict[str, Any]
+    logger: structlog.BoundLogger, name: str, event_dict: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Add service information to log events."""
     # Service info will be added by the service using this processor
@@ -16,9 +14,7 @@ def add_service_info(
 
 
 def filter_sensitive_data(
-    logger: structlog.BoundLogger,
-    name: str,
-    event_dict: Dict[str, Any]
+    logger: structlog.BoundLogger, name: str, event_dict: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Filter out sensitive data from logs."""
     sensitive_fields = [
@@ -33,7 +29,7 @@ def filter_sensitive_data(
         "private_key",
         "client_secret",
     ]
-    
+
     def _filter_dict(d: Dict[str, Any]) -> Dict[str, Any]:
         """Recursively filter dictionary."""
         filtered = {}
@@ -48,4 +44,4 @@ def filter_sensitive_data(
                 filtered[k] = v
         return filtered
 
-    return _filter_dict(event_dict) 
+    return _filter_dict(event_dict)

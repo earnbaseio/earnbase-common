@@ -72,10 +72,7 @@ class MongoDB:
             return False
 
     async def find_one(
-        self,
-        collection: str,
-        query: Dict[str, Any],
-        projection: Dict[str, Any] = None
+        self, collection: str, query: Dict[str, Any], projection: Dict[str, Any] = None
     ) -> Optional[Dict[str, Any]]:
         """Find one document in collection."""
         if not self.db:
@@ -89,7 +86,7 @@ class MongoDB:
         projection: Dict[str, Any] = None,
         sort: List[tuple] = None,
         skip: int = 0,
-        limit: int = 0
+        limit: int = 0,
     ) -> List[Dict[str, Any]]:
         """Find multiple documents in collection."""
         if not self.db:
@@ -105,11 +102,7 @@ class MongoDB:
 
         return await cursor.to_list(None)
 
-    async def insert_one(
-        self,
-        collection: str,
-        document: Dict[str, Any]
-    ) -> str:
+    async def insert_one(self, collection: str, document: Dict[str, Any]) -> str:
         """Insert one document into collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
@@ -117,9 +110,7 @@ class MongoDB:
         return str(result.inserted_id)
 
     async def insert_many(
-        self,
-        collection: str,
-        documents: List[Dict[str, Any]]
+        self, collection: str, documents: List[Dict[str, Any]]
     ) -> List[str]:
         """Insert multiple documents into collection."""
         if not self.db:
@@ -132,16 +123,12 @@ class MongoDB:
         collection: str,
         query: Dict[str, Any],
         update: Dict[str, Any],
-        upsert: bool = False
+        upsert: bool = False,
     ) -> int:
         """Update one document in collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
-        result = await self.db[collection].update_one(
-            query,
-            update,
-            upsert=upsert
-        )
+        result = await self.db[collection].update_one(query, update, upsert=upsert)
         return result.modified_count
 
     async def update_many(
@@ -149,45 +136,29 @@ class MongoDB:
         collection: str,
         query: Dict[str, Any],
         update: Dict[str, Any],
-        upsert: bool = False
+        upsert: bool = False,
     ) -> int:
         """Update multiple documents in collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
-        result = await self.db[collection].update_many(
-            query,
-            update,
-            upsert=upsert
-        )
+        result = await self.db[collection].update_many(query, update, upsert=upsert)
         return result.modified_count
 
-    async def delete_one(
-        self,
-        collection: str,
-        query: Dict[str, Any]
-    ) -> int:
+    async def delete_one(self, collection: str, query: Dict[str, Any]) -> int:
         """Delete one document from collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
         result = await self.db[collection].delete_one(query)
         return result.deleted_count
 
-    async def delete_many(
-        self,
-        collection: str,
-        query: Dict[str, Any]
-    ) -> int:
+    async def delete_many(self, collection: str, query: Dict[str, Any]) -> int:
         """Delete multiple documents from collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
         result = await self.db[collection].delete_many(query)
         return result.deleted_count
 
-    async def count_documents(
-        self,
-        collection: str,
-        query: Dict[str, Any]
-    ) -> int:
+    async def count_documents(self, collection: str, query: Dict[str, Any]) -> int:
         """Count documents in collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
@@ -199,32 +170,22 @@ class MongoDB:
         keys: List[tuple],
         unique: bool = False,
         sparse: bool = False,
-        background: bool = True
+        background: bool = True,
     ) -> str:
         """Create index on collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
         return await self.db[collection].create_index(
-            keys,
-            unique=unique,
-            sparse=sparse,
-            background=background
+            keys, unique=unique, sparse=sparse, background=background
         )
 
-    async def drop_index(
-        self,
-        collection: str,
-        index_name: str
-    ) -> None:
+    async def drop_index(self, collection: str, index_name: str) -> None:
         """Drop index from collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
         await self.db[collection].drop_index(index_name)
 
-    async def list_indexes(
-        self,
-        collection: str
-    ) -> List[Dict[str, Any]]:
+    async def list_indexes(self, collection: str) -> List[Dict[str, Any]]:
         """List indexes for collection."""
         if not self.db:
             raise ConnectionError("MongoDB connection not initialized")
@@ -232,4 +193,4 @@ class MongoDB:
 
 
 # Global MongoDB instance
-mongodb = MongoDB() 
+mongodb = MongoDB()

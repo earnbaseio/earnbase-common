@@ -8,13 +8,9 @@ import sys
 from typing import Any, Dict
 
 import structlog
+from earnbase_common.logging.processors import add_service_info, filter_sensitive_data
 from structlog.dev import ConsoleRenderer
 from structlog.stdlib import ProcessorFormatter
-
-from earnbase_common.logging.processors import (
-    add_service_info,
-    filter_sensitive_data,
-)
 
 
 def ensure_log_dir(log_file: str) -> None:
@@ -46,7 +42,7 @@ def get_logging_config(
     """Get logging configuration dictionary."""
     # Ensure log directory exists
     ensure_log_dir(log_file)
-    
+
     error_log = os.path.join(os.path.dirname(log_file), f"{service_name}-error.log")
 
     return {
@@ -122,8 +118,13 @@ def setup_logging(
     """Set up structured logging."""
     # Configure structlog
     structlog.configure(
-        processors=get_shared_processors() + [
-            structlog.processors.JSONRenderer() if not debug else structlog.dev.ConsoleRenderer(colors=True)
+        processors=get_shared_processors()
+        + [
+            (
+                structlog.processors.JSONRenderer()
+                if not debug
+                else structlog.dev.ConsoleRenderer(colors=True)
+            )
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
@@ -138,4 +139,4 @@ def setup_logging(
             log_level=log_level,
             debug=debug,
         )
-    ) 
+    )

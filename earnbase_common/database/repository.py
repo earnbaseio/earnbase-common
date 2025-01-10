@@ -1,12 +1,12 @@
 """Base repository module."""
 
-from typing import Any, Dict, List, Optional, TypeVar, Generic
 from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorCollection
-from pydantic import BaseModel
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from earnbase_common.logging import get_logger
 from earnbase_common.metrics import metrics
+from motor.motor_asyncio import AsyncIOMotorCollection
+from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
@@ -74,7 +74,9 @@ class BaseRepository(Generic[T]):
             metrics.db_operation_count.labels(
                 operation="create", collection=self.collection.name
             ).inc()
-            return await self.find_one({"_id": result.inserted_id})
+            doc = await self.find_one({"_id": result.inserted_id})
+            assert doc is not None, "Created document not found"
+            return doc
 
     async def update(self, filter: Dict[str, Any], data: Dict[str, Any]) -> Optional[T]:
         """Update document."""
@@ -101,4 +103,4 @@ class BaseRepository(Generic[T]):
             metrics.db_operation_count.labels(
                 operation="delete", collection=self.collection.name
             ).inc()
-            return result.deleted_count > 0 
+            return result.deleted_count > 0
