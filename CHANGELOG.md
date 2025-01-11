@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.17] - 2024-01-11
+
+### Added
+- Added code examples and use cases for all components in README.md
+- Added detailed documentation for value objects and core components
+- Improved code examples with error handling and expected outputs
+
+### Changed
+- Restructured security module:
+  - Separated JWT, password, and policy into distinct files
+  - Enhanced TokenManager with better token type handling
+  - Improved PasswordHasher with policy validation
+  - Added comprehensive SecurityPolicy configuration
+
+- Restructured models module:
+  - Enhanced BaseModel with better JSON encoding
+  - Added Entity as base class for domain entities
+  - Improved AggregateRoot with event management
+  - Enhanced DomainEvent with better type safety
+
+- Updated README.md structure with better organization
+- Enhanced documentation with practical examples
+
+### Fixed
+- Fixed circular imports in models module
+- Improved error handling in security components
+- Enhanced type hints across all modules
+
 ## [0.1.16] - 2025-01-11
 
 ### Added

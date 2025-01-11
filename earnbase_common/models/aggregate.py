@@ -1,29 +1,28 @@
-"""Base aggregate root model."""
+"""Aggregate root base class."""
 
-import json
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import List, Optional
+from uuid import UUID, uuid4
 
-from earnbase_common.models.domain_event import DomainEvent
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from .domain_event import DomainEvent
 
 
 class AggregateRoot(BaseModel):
-    """Base aggregate root model."""
+    """Base class for aggregate roots."""
 
-    id: str = Field(description="Aggregate ID")
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Created timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Updated timestamp"
-    )
-    version: int = Field(default=1, description="Aggregate version")
+    id: UUID = Field(default_factory=uuid4)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[datetime] = None
+    version: int = 1
+    _events: List[DomainEvent] = []
 
-    def __init__(self, **data: Any):
-        """Initialize aggregate root."""
-        super().__init__(**data)
-        self._events: List[DomainEvent] = []
+    model_config = ConfigDict(
+        frozen=True,
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+    )
 
     def add_event(self, event: DomainEvent) -> None:
         """Add domain event."""
@@ -33,6 +32,16 @@ class AggregateRoot(BaseModel):
         """Clear domain events."""
         self._events = []
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return json.loads(self.model_dump_json())
+    @property
+    def events(self) -> List[DomainEvent]:
+        """Get domain events."""
+        return self._events.copy()
+
+    def increment_version(self) -> None:
+        """Increment version."""
+        object.__setattr__(self, "version", self.version + 1)
+        object.__setattr__(self, "updated_at", datetime.utcnow())
+
+    def __str__(self) -> str:
+        """Return string representation."""
+        return f"{self.__class__.__name__}(id={self.id}, version={self.version})"
