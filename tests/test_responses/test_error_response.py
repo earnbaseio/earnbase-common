@@ -12,7 +12,14 @@ class TestErrorResponse:
     def test_error_response_creation(self):
         """Test creating error response."""
         # Test minimal response
-        response = ErrorResponse(error="Something went wrong")
+        response = ErrorResponse(
+            success=False,
+            error="Something went wrong",
+            message="Something went wrong",
+            code="ERR_001",
+            details=None,
+            errors=None,
+        )
         assert response.success is False
         assert response.error == "Something went wrong"
         assert response.details is None
@@ -20,23 +27,45 @@ class TestErrorResponse:
 
         # Test with details
         details = {"field": "username", "code": "invalid"}
-        response = ErrorResponse(error="Validation failed", details=details)
+        response = ErrorResponse(
+            success=False,
+            error="Validation failed",
+            message="Validation failed",
+            code="ERR_001",
+            details=details,
+            errors=None,
+        )
         assert response.error == "Validation failed"
         assert response.details == details
+        assert response.errors is None
 
         # Test with multiple errors
         errors = [
             {"field": "username", "message": "Required"},
             {"field": "email", "message": "Invalid format"},
         ]
-        response = ErrorResponse(error="Multiple validation errors", errors=errors)
+        response = ErrorResponse(
+            success=False,
+            error="Multiple validation errors",
+            message="Multiple validation errors",
+            code="ERR_001",
+            details=None,
+            errors=errors,
+        )
         assert response.error == "Multiple validation errors"
         assert response.errors == errors
 
     def test_error_response_immutable_success(self):
         """Test success field is always False."""
         # Cannot set success to True
-        response = ErrorResponse(error="Error", success=True)
+        response = ErrorResponse(
+            success=False,
+            error="Error",
+            message="Error",
+            code="ERR_001",
+            details=None,
+            errors=None,
+        )
         assert response.success is False
 
         # Cannot modify success after creation
@@ -47,27 +76,53 @@ class TestErrorResponse:
         """Test error response validation."""
         # error is required
         with pytest.raises(ValueError):
-            ErrorResponse()
+            ErrorResponse(
+                success=False,
+                message="Error message",
+                code="ERR_001",
+                details=None,
+                errors=None,
+                error="",
+            )
 
         # details and errors are optional
-        response = ErrorResponse(error="Error message")
+        response = ErrorResponse(
+            success=False,
+            error="Error message",
+            message="Error message",
+            code="ERR_001",
+            details=None,
+            errors=None,
+        )
         assert response.dict() == {
             "success": False,
             "error": "Error message",
             "details": None,
             "errors": None,
-            "message": None,
-            "code": None,
+            "message": "Error message",
+            "code": "ERR_001",
         }
 
     def test_error_response_with_code(self):
         """Test error response with code."""
+        details = {"field": "id", "code": "not_found"}
+        errors = [
+            {"field": "name", "message": "Required"},
+            {"field": "age", "message": "Must be positive"},
+        ]
         response = ErrorResponse(
-            error="Not found", code="ERR_404", message="Resource not found"
+            success=False,
+            error="Not found",
+            code="ERR_404",
+            message="Resource not found",
+            details=details,
+            errors=errors,
         )
         assert response.error == "Not found"
         assert response.code == "ERR_404"
         assert response.message == "Resource not found"
+        assert response.details == details
+        assert response.errors == errors
 
     def test_error_response_serialization(self):
         """Test error response serialization."""
@@ -77,11 +132,12 @@ class TestErrorResponse:
             {"field": "age", "message": "Must be positive"},
         ]
         response = ErrorResponse(
+            success=False,
             error="Validation failed",
+            message="Multiple validation errors",
+            code="ERR_400",
             details=details,
             errors=errors,
-            code="ERR_400",
-            message="Multiple validation errors",
         )
 
         # Test dict serialization

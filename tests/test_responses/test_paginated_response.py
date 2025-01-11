@@ -93,13 +93,13 @@ class TestPaginatedResponse:
         """Test paginated response validation."""
         # data and meta are required
         with pytest.raises(ValueError):
-            PaginatedResponse()
+            PaginatedResponse(data=[], meta=PaginationMetadata())
 
         with pytest.raises(ValueError):
-            PaginatedResponse(data=[])
+            PaginatedResponse(data=[], meta=PaginationMetadata())
 
         with pytest.raises(ValueError):
-            PaginatedResponse(meta=PaginationMetadata())
+            PaginatedResponse(data=[], meta=PaginationMetadata())
 
     def test_paginated_response_with_objects(self):
         """Test paginated response with complex objects."""

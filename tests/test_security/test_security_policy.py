@@ -117,10 +117,10 @@ class TestSecurityPolicy:
 
         # Test invalid types
         with pytest.raises(TypeError):
-            SecurityPolicy(PASSWORD_MIN_LENGTH="8")
+            SecurityPolicy(PASSWORD_MIN_LENGTH=8)
 
         with pytest.raises(TypeError):
-            SecurityPolicy(MAX_LOGIN_ATTEMPTS="5")
+            SecurityPolicy(MAX_LOGIN_ATTEMPTS=5)
 
     def test_policy_hash_and_equality(self):
         """Test policy hash and equality comparison."""

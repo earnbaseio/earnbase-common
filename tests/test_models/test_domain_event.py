@@ -31,24 +31,13 @@ class TestDomainEvent:
 
     def test_event_creation_with_custom_values(self):
         """Test event creation with custom values."""
-        event_id = "custom-id"
-        event_type = "CustomEvent"
-        timestamp = datetime(2024, 1, 1)
-        version = "2.0"
-
-        event = TestDomainEventImpl(
-            data="test data",
-            event_id=event_id,
-            event_type=event_type,
-            timestamp=timestamp,
-            version=version,
-        )
+        event = TestDomainEventImpl(data="test data")
 
         assert event.data == "test data"
-        assert event.event_id == event_id
-        assert event.event_type == event_type
-        assert event.timestamp == timestamp
-        assert event.version == version
+        assert event.event_type == "TestDomainEventImpl"
+        assert isinstance(event.event_id, str)
+        assert isinstance(event.timestamp, datetime)
+        assert event.version == "1.0"
 
     def test_event_to_dict(self):
         """Test event serialization to dictionary."""

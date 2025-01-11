@@ -1,7 +1,7 @@
 """Tests for Redis client."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from aioredis import Redis

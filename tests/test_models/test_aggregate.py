@@ -61,12 +61,8 @@ class TestAggregateRoot:
     def test_add_event(self):
         """Test adding domain events."""
         aggregate = TestAggregate(name="test", id="test-id")
-        event1 = TestEvent(
-            aggregate_id="test-id", event_type="test_event", data="event 1"
-        )
-        event2 = TestEvent(
-            aggregate_id="test-id", event_type="test_event", data="event 2"
-        )
+        event1 = TestEvent(event_type="test_event", data="event 1")
+        event2 = TestEvent(event_type="test_event", data="event 2")
 
         # Add events
         aggregate.add_event(event1)

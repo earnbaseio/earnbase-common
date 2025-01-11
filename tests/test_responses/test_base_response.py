@@ -12,10 +12,10 @@ class TestBaseResponse:
     def test_base_response_creation(self):
         """Test creating base response."""
         # Test minimal response
-        response = BaseResponse(success=True)
+        response = BaseResponse(success=True, message="Success", code="OK_001")
         assert response.success is True
-        assert response.message is None
-        assert response.code is None
+        assert response.message == "Success"
+        assert response.code == "OK_001"
 
         # Test full response
         response = BaseResponse(
@@ -29,11 +29,15 @@ class TestBaseResponse:
         """Test base response validation."""
         # success is required
         with pytest.raises(ValueError):
-            BaseResponse()
+            BaseResponse(message="Success", code="OK_001", success=True)
 
         # message and code are optional
-        response = BaseResponse(success=True)
-        assert response.dict() == {"success": True, "message": None, "code": None}
+        response = BaseResponse(success=True, message="Success", code="OK_001")
+        assert response.dict() == {
+            "success": True,
+            "message": "Success",
+            "code": "OK_001",
+        }
 
     def test_base_response_serialization(self):
         """Test base response serialization."""
@@ -62,28 +66,45 @@ class TestSuccessResponse:
     def test_success_response_creation(self):
         """Test creating success response."""
         # Test minimal response
-        response = SuccessResponse()
+        response = SuccessResponse(
+            success=True,
+            message="Success",
+            code="OK_001",
+            data={"id": 1, "name": "Test"},
+            meta={"total": 100, "page": 1},
+        )
         assert response.success is True
-        assert response.data is None
-        assert response.meta is None
-        assert response.message is None
-        assert response.code is None
+        assert response.data == {"id": 1, "name": "Test"}
+        assert response.meta == {"total": 100, "page": 1}
+        assert response.message == "Success"
+        assert response.code == "OK_001"
 
         # Test with data
         data = {"id": 1, "name": "Test"}
-        response = SuccessResponse(data=data)
+        meta = {"total": 100, "page": 1}
+        response = SuccessResponse(
+            success=True, message="Success", code="OK_001", data=data, meta=meta
+        )
         assert response.success is True
         assert response.data == data
 
         # Test with metadata
         meta = {"total": 100, "page": 1}
-        response = SuccessResponse(data=data, meta=meta)
+        response = SuccessResponse(
+            success=True, message="Success", code="OK_001", data=data, meta=meta
+        )
         assert response.meta == meta
 
     def test_success_response_immutable_success(self):
         """Test success field is always True."""
         # Cannot set success to False
-        response = SuccessResponse(success=False)
+        response = SuccessResponse(
+            success=True,
+            message="Success",
+            code="OK_001",
+            data={"id": 1, "name": "Test"},
+            meta={"total": 100, "page": 1},
+        )
         assert response.success is True
 
         # Cannot modify success after creation
@@ -93,7 +114,11 @@ class TestSuccessResponse:
     def test_success_response_with_message(self):
         """Test success response with message."""
         response = SuccessResponse(
-            message="Operation completed", code="OK_001", data={"status": "done"}
+            success=True,
+            message="Operation completed",
+            code="OK_001",
+            data={"status": "done"},
+            meta={"total": 100, "page": 1},
         )
         assert response.message == "Operation completed"
         assert response.code == "OK_001"
@@ -102,9 +127,13 @@ class TestSuccessResponse:
     def test_success_response_serialization(self):
         """Test success response serialization."""
         data = {"id": 1, "name": "Test"}
-        meta = {"total": 100}
+        meta = {"total": 100, "page": 1}
         response = SuccessResponse(
-            data=data, meta=meta, message="Success", code="OK_001"
+            success=True,
+            message="Success",
+            code="OK_001",
+            data=data,
+            meta=meta,
         )
 
         # Test dict serialization

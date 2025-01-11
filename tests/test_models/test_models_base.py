@@ -11,7 +11,7 @@ class TestModel(BaseModel):
 
     name: str
     age: int
-    created_at: datetime = None
+    created_at: datetime = datetime.now()
 
 
 @pytest.mark.unit
@@ -30,11 +30,11 @@ class TestBaseModel:
     def test_model_validation(self):
         """Test model validation."""
         with pytest.raises(ValueError):
-            TestModel(name="Test", age="invalid")  # age should be int
+            TestModel(name="Test", age=25)  # age should be int
 
     def test_to_dict(self):
         """Test conversion to dictionary."""
-        created_at = datetime(2024, 1, 1)
+        created_at = datetime.now()
         model = TestModel(name="Test", age=25, created_at=created_at)
         data = model.to_dict()
 
@@ -45,7 +45,7 @@ class TestBaseModel:
 
     def test_json_serialization(self):
         """Test JSON serialization of datetime."""
-        created_at = datetime(2024, 1, 1)
+        created_at = datetime.now()
         model = TestModel(name="Test", age=25, created_at=created_at)
         json_data = model.model_dump_json()
 

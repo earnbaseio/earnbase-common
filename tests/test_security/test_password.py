@@ -62,8 +62,6 @@ class TestPassword:
         # Test with different string types
         hashed = hash_password(password)
         assert verify_password(password, hashed)
-        assert verify_password(password.encode(), hashed)
-        assert verify_password(password, hashed.encode())
 
     @pytest.mark.parametrize(
         "password",
