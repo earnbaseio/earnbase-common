@@ -1,6 +1,6 @@
 [project]
 name = "earnbase-common"
-version = "0.1.13"
+version = "0.1.15"
 description = "Common utilities for Earnbase services"
 authors = [
     {name = "Earnbase Team", email = "dev@earnbase.io"},
@@ -17,7 +17,7 @@ dependencies = [
 requires-python = ">=3.9"
 readme = "README.md"
 license = {text = "MIT"}
-keywords = ["logging", "utilities", "microservices"]
+keywords = ["logging", "utilities", "microservices", "fastapi", "mongodb", "redis"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -28,13 +28,17 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Logging",
+    "Framework :: FastAPI",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 
 [project.urls]
-Homepage = "https://github.com/earnbaseio/earnbase-common"
-Documentation = "https://github.com/earnbaseio/earnbase-common#readme"
-Repository = "https://github.com/earnbaseio/earnbase-common.git"
-Issues = "https://github.com/earnbaseio/earnbase-common/issues"
+"Homepage" = "https://github.com/earnbaseio/earnbase-common"
+"Documentation" = "https://github.com/earnbaseio/earnbase-common#readme"
+"Source Code" = "https://github.com/earnbaseio/earnbase-common"
+"Bug Tracker" = "https://github.com/earnbaseio/earnbase-common/issues"
+"Changelog" = "https://github.com/earnbaseio/earnbase-common/blob/main/CHANGELOG.md"
 
 [tool.pdm]
 distribution = true
