@@ -22,7 +22,9 @@ class BaseHttpClient:
         try:
             response = await self.client.get(path)
             response.raise_for_status()
-            return response.json()
+            data = await response.json()
+            await response.aclose()
+            return data
         except httpx.HTTPError as e:
             logger.error(f"GET request failed for {path}: {str(e)}")
             return None
@@ -32,7 +34,9 @@ class BaseHttpClient:
         try:
             response = await self.client.post(path, json=json)
             response.raise_for_status()
-            return response.json()
+            data = await response.json()
+            await response.aclose()
+            return data
         except httpx.HTTPError as e:
             logger.error(f"POST request failed for {path}: {str(e)}")
             return None

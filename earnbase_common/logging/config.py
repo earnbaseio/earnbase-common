@@ -10,7 +10,14 @@ from typing import Any, Dict
 import structlog
 from earnbase_common.logging.processors import add_service_info, filter_sensitive_data
 from structlog.dev import ConsoleRenderer
-from structlog.stdlib import ProcessorFormatter
+from structlog.processors import JSONRenderer
+from structlog.stdlib import (
+    BoundLogger,
+    LoggerFactory,
+    ProcessorFormatter,
+    add_log_level,
+    add_logger_name,
+)
 
 
 def ensure_log_dir(log_file: str) -> None:
@@ -24,12 +31,13 @@ def get_shared_processors() -> list:
     """Get shared processors for all formatters."""
     return [
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
+        add_logger_name,
+        add_log_level,
         add_service_info,
         filter_sensitive_data,
-        structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.ExceptionPrettyPrinter(),
     ]
 
 
@@ -44,6 +52,13 @@ def get_logging_config(
     ensure_log_dir(log_file)
 
     error_log = os.path.join(os.path.dirname(log_file), f"{service_name}-error.log")
+    shared_processors = get_shared_processors()
+
+    json_renderer = JSONRenderer(indent=None)
+    console_renderer = ConsoleRenderer(
+        colors=True,
+        exception_formatter=structlog.dev.plain_traceback,
+    )
 
     return {
         "version": 1,
@@ -51,16 +66,13 @@ def get_logging_config(
         "formatters": {
             "json": {
                 "()": ProcessorFormatter,
-                "processor": structlog.processors.JSONRenderer(),
-                "foreign_pre_chain": get_shared_processors(),
+                "processor": json_renderer,
+                "foreign_pre_chain": shared_processors,
             },
             "colored": {
                 "()": ProcessorFormatter,
-                "processor": ConsoleRenderer(
-                    colors=True,
-                    exception_formatter=structlog.dev.plain_traceback,
-                ),
-                "foreign_pre_chain": get_shared_processors(),
+                "processor": console_renderer,
+                "foreign_pre_chain": shared_processors,
             },
         },
         "handlers": {
@@ -68,6 +80,7 @@ def get_logging_config(
                 "class": "logging.StreamHandler",
                 "formatter": "colored" if debug else "json",
                 "stream": sys.stdout,
+                "level": "DEBUG" if debug else "INFO",
             },
             "file": {
                 "class": "logging.handlers.RotatingFileHandler",
@@ -117,17 +130,13 @@ def setup_logging(
 ) -> None:
     """Set up structured logging."""
     # Configure structlog
+    renderer = ConsoleRenderer(colors=True) if debug else JSONRenderer(indent=None)
+
     structlog.configure(
-        processors=get_shared_processors()
-        + [
-            (
-                structlog.processors.JSONRenderer()
-                if not debug
-                else structlog.dev.ConsoleRenderer(colors=True)
-            )
-        ],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
+        processors=get_shared_processors() + [renderer],
+        context_class=dict,
+        logger_factory=LoggerFactory(),
+        wrapper_class=BoundLogger,
         cache_logger_on_first_use=True,
     )
 

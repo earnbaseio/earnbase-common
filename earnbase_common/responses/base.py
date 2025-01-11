@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BaseResponse(BaseModel):
@@ -38,10 +38,11 @@ class PaginationMetadata(BaseModel):
     total: int = Field(default=0, description="Total number of items")
     total_pages: int = Field(default=0, description="Total number of pages")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {"page": 1, "per_page": 10, "total": 100, "total_pages": 10}
         }
+    )
 
 
 class PaginatedResponse(BaseModel):

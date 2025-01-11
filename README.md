@@ -1,60 +1,62 @@
 # Earnbase Common
 
-A comprehensive utility package providing common functionality for Earnbase microservices.
+Core library for Earnbase Platform services.
+
+## Overview
+
+Earnbase Common provides shared components, utilities, and standards for building microservices in the Earnbase Platform. It implements common patterns and best practices to ensure consistency across services.
 
 ## Features
 
-### Core Components
+### Domain-Driven Design Components
 
-- **Configuration Management** (`config/`)
-  - YAML-based configuration loading
-  - Environment variable support
-  - Pydantic settings validation
+- **Base Models**
+  - `BaseModel`: Foundation for all domain models with JSON serialization
+  - `DomainEvent`: Event tracking with automatic type assignment
+  - `AggregateRoot`: Aggregate root pattern with event management
 
-- **Database Integration** (`database/`)
-  - MongoDB async connection management
-  - Connection pooling
-  - Database operation utilities
+- **Value Objects**
+  - `Email`: Email validation and formatting
+  - `PasswordHash`: Secure password hash handling
+  - `Token`: JWT token management with expiration
+  - `PhoneNumber`: Phone number validation with country codes
+  - `Money`: Currency handling with validation
+  - `Address`: Address formatting and validation
 
-- **Error Handling** (`errors/`)
-  - Standardized error classes
-  - Custom exception handling
-  - Error response formatting
+### Security
 
-- **HTTP Utilities** (`http/`)
-  - Request/Response handling
-  - HTTP client utilities
-  - API response formatting
+- **Password Management**
+  - Strong password validation with configurable policies
+  - Secure hashing using bcrypt
+  - Password verification utilities
 
-- **Logging** (`logging/`)
-  - Structured logging with structlog
-  - Log formatting and configuration
-  - Log level management
+- **Token Management**
+  - JWT token creation and validation
+  - Support for access and refresh tokens
+  - Configurable token expiration policies
 
-- **Metrics** (`metrics/`)
-  - Prometheus metrics integration
-  - Custom metrics collection
-  - Monitoring utilities
+### Metrics & Monitoring
 
-- **Middleware** (`middleware/`)
-  - Request tracking
-  - Authentication middleware
-  - Cross-cutting concerns
+- **Prometheus Integration**
+  - Counter, Histogram, Gauge, Summary metrics
+  - Custom metric decorators
+  - Standardized metric naming
 
-- **Redis Integration** (`redis/`)
-  - Async Redis client
-  - Connection management
-  - Caching utilities
+- **Decorators**
+  - `@metrics_decorator.counter`: Count method calls
+  - `@metrics_decorator.histogram`: Measure execution time
 
-- **Response Handling** (`responses/`)
-  - Standardized response models
-  - Success/Error response formatting
-  - JSON serialization
+### Database & Caching
 
-- **Security** (`security/`)
-  - JWT token management
-  - Password hashing
-  - Cryptographic utilities
+- MongoDB client with connection pooling
+- Redis client for caching
+- Repository pattern implementations
+
+### Error Handling
+
+- Standard error types
+- Error response formatting
+- Validation error handling
 
 ## Installation
 
@@ -62,99 +64,48 @@ A comprehensive utility package providing common functionality for Earnbase micr
 pdm add earnbase-common
 ```
 
-## Usage
-
-### Configuration
+## Quick Start
 
 ```python
-from earnbase_common.config import load_config
+from earnbase_common.models import BaseModel
+from earnbase_common.value_objects import Email, Money
+from earnbase_common.security import SecurityPolicy, TokenManager
+from earnbase_common.metrics import metrics_decorator
 
-config = load_config("config.yaml")
+# Define a domain model
+class User(BaseModel):
+    email: Email
+    balance: Money
+    is_active: bool = True
+
+# Use security policies
+security_policy = SecurityPolicy()
+min_length = security_policy.PASSWORD_MIN_LENGTH
+
+# Track metrics
+@metrics_decorator.histogram("method_duration_seconds", ["method", "status"])
+async def process_user(user: User):
+    # Your code here
+    pass
 ```
 
-### Database
+## Documentation
 
-```python
-from earnbase_common.database import mongodb
+Detailed documentation is available in the `docs` directory:
 
-await mongodb.connect(url="mongodb://localhost:27017")
-```
-
-### Logging
-
-```python
-from earnbase_common.logging import get_logger
-
-logger = get_logger(__name__)
-logger.info("message", extra={"key": "value"})
-```
-
-### Redis
-
-```python
-from earnbase_common.redis import redis_client
-
-await redis_client.connect(url="redis://localhost:6379")
-```
-
-### Response Models
-
-```python
-from earnbase_common.responses import SuccessResponse
-
-response = SuccessResponse(
-    success=True,
-    message="Operation successful",
-    data={"key": "value"}
-)
-```
-
-## Development
-
-### Prerequisites
-
-- Python 3.9+
-- PDM
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies:
-```bash
-pdm install
-```
-
-### Testing
-
-```bash
-pdm run pytest
-```
-
-### Building
-
-```bash
-pdm build
-```
-
-## Version Compatibility
-
-- Python: >=3.9
-- FastAPI: >=0.104.1
-- Pydantic: >=2.5.2
-- Motor: >=3.3.2
+- [Models](docs/models.md): Domain models and aggregates
+- [Value Objects](docs/value-objects.md): Immutable value objects
+- [Security](docs/security.md): Security features and policies
+- [Metrics](docs/metrics.md): Metrics collection and monitoring
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-MIT
-
-## Support
-
-For support, email dev@earnbase.io 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 

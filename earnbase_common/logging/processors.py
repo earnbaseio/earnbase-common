@@ -16,32 +16,39 @@ def add_service_info(
 def filter_sensitive_data(
     logger: structlog.BoundLogger, name: str, event_dict: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Filter out sensitive data from logs."""
-    sensitive_fields = [
+    """Filter sensitive data from log events."""
+    SENSITIVE_KEYS = {
         "password",
         "token",
         "secret",
-        "key",
+        "api_key",
+        "secret_key",
+        "private_key",
         "authorization",
         "access_token",
         "refresh_token",
-        "api_key",
-        "private_key",
-        "client_secret",
-    ]
+    }
 
-    def _filter_dict(d: Dict[str, Any]) -> Dict[str, Any]:
-        """Recursively filter dictionary."""
-        filtered = {}
-        for k, v in d.items():
-            if isinstance(v, dict):
-                filtered[k] = _filter_dict(v)
-            elif isinstance(v, list):
-                filtered[k] = [_filter_dict(i) if isinstance(i, dict) else i for i in v]
-            elif any(field in k.lower() for field in sensitive_fields):
-                filtered[k] = "***FILTERED***"
-            else:
-                filtered[k] = v
-        return filtered
+    def _is_sensitive(key):
+        key = key.lower()
+        return any(sensitive in key for sensitive in SENSITIVE_KEYS)
+
+    def _filter_value(value):
+        if isinstance(value, dict):
+            return _filter_dict(value)
+        elif isinstance(value, list):
+            return _filter_list(value)
+        return value
+
+    def _filter_dict(d):
+        if not isinstance(d, dict):
+            return d
+        return {
+            k: "***FILTERED***" if _is_sensitive(k) else _filter_value(v)
+            for k, v in d.items()
+        }
+
+    def _filter_list(lst):
+        return [_filter_value(item) for item in lst]
 
     return _filter_dict(event_dict)
