@@ -8,9 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class BaseResponse(BaseModel):
     """Base response model."""
 
-    success: bool = Field(..., description="Whether the request was successful")
     message: Optional[str] = Field(None, description="Response message")
-    code: Optional[str] = Field(None, description="Response code")
+    meta: Optional[Dict[str, Any]] = Field(None, description="Response metadata")
 
 
 class SuccessResponse(BaseResponse):
@@ -18,13 +17,13 @@ class SuccessResponse(BaseResponse):
 
     success: bool = Field(True, description="Request was successful")
     data: Optional[Any] = Field(None, description="Response data")
-    meta: Optional[Dict[str, Any]] = Field(None, description="Response metadata")
 
-
+    
 class ErrorResponse(BaseResponse):
     """Error response model."""
 
     success: bool = Field(False, description="Request failed")
+    code: str = Field(..., description="Error code")
     error: str = Field(..., description="Error message")
     details: Optional[Dict[str, Any]] = Field(None, description="Error details")
     errors: Optional[List[Dict[str, Any]]] = Field(None, description="List of errors")
@@ -45,7 +44,7 @@ class PaginationMetadata(BaseModel):
     )
 
 
-class PaginatedResponse(BaseModel):
+class PaginatedResponse(BaseResponse):
     """Paginated response model."""
 
     data: List[Any] = Field(description="List of items")
