@@ -358,4 +358,140 @@ pdm add earnbase-common
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Dependency Injection with Containers
+
+The `containers` module provides a standardized way to manage dependencies across services using the dependency-injector package.
+
+### BaseContainer
+
+The `BaseContainer` class serves as a foundation for service-specific containers, providing common functionality:
+
+```python
+from earnbase_common.containers import BaseContainer
+from dependency_injector import providers
+
+class ServiceContainer(BaseContainer):
+    """Service-specific container."""
+    
+    # Override config with service-specific settings
+    config = providers.Singleton(ServiceSettings)
+    
+    # Add service-specific providers
+    service = providers.Singleton(MyService)
+    repository = providers.Singleton(MyRepository)
+```
+
+### Common Providers
+
+The `BaseContainer` includes several pre-configured providers:
+
+1. **MongoDB**:
+```python
+# Automatically configured from settings
+mongodb = providers.Singleton(MongoDB)
+
+# Access in your code
+mongodb_client = container.mongodb()
+await mongodb_client.connect(
+    url=config.MONGODB_URL,
+    db_name=config.MONGODB_DB_NAME
+)
+```
+
+2. **Redis**:
+```python
+# Optional Redis support
+redis = providers.Singleton(RedisClient)
+
+# Access in your code if configured
+redis_client = container.redis()
+if redis_url:
+    await redis_client.connect(
+        url=redis_url,
+        db=redis_db
+    )
+```
+
+3. **Metrics**:
+```python
+# Metrics collection
+metrics = providers.Singleton(
+    MetricsManager,
+    enabled=config.METRICS_ENABLED
+)
+```
+
+### Resource Lifecycle
+
+The `BaseContainer` manages resource lifecycle automatically:
+
+```python
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    container = ServiceContainer()
+    
+    try:
+        # Initialize resources (MongoDB, Redis, etc.)
+        await container.init_resources()
+        
+        # Wire container
+        container.wire(packages=["my_service"])
+        
+        yield
+        
+    finally:
+        # Cleanup resources
+        await container.shutdown_resources()
+```
+
+### Configuration Integration
+
+The container works seamlessly with the configuration system:
+
+```python
+from earnbase_common.config import BaseSettings
+
+class ServiceSettings(BaseSettings):
+    """Service-specific settings."""
+    
+    def _load_yaml_mappings(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Load service-specific mappings."""
+        mappings = super()._load_yaml_mappings(config)
+        
+        # Add service-specific mappings
+        service_mappings = {
+            "SERVICE_NAME": config["service"]["name"],
+            "MONGODB_URL": config["mongodb"]["url"],
+            "REDIS_URL": config["redis"].get("url"),
+            "METRICS_ENABLED": config["metrics"].get("enabled", True),
+        }
+        
+        mappings.update(service_mappings)
+        return mappings
+```
+
+### Best Practices
+
+1. **Resource Management**:
+   - Always use `init_resources()` and `shutdown_resources()`
+   - Handle optional resources like Redis gracefully
+   - Implement proper error handling for resource initialization
+
+2. **Configuration**:
+   - Use type-safe configuration with proper defaults
+   - Handle optional settings gracefully
+   - Validate configuration during initialization
+
+3. **Dependency Wiring**:
+   - Wire containers at application startup
+   - Use proper package scoping for wiring
+   - Avoid circular dependencies
+
+4. **Error Handling**:
+   - Handle resource initialization failures
+   - Implement proper cleanup in shutdown
+   - Log resource lifecycle events
+``` 
+</rewritten_file>

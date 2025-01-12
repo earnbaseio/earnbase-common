@@ -81,7 +81,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated pyproject.toml
 - Updated CHANGELOG.md
 
-## [0.1.18] - 2024-01-12
+## [0.2.0] - 2024-01-12
+
+### Added
+- New `BaseContainer` class in `containers` module for standardized dependency injection
+- Common providers for MongoDB, Redis, and Metrics
+- Resource lifecycle management with `init_resources` and `shutdown_resources`
+- Improved config handling with safe attribute access
+
+### Changed
+- Refactored MongoDB client to use connection pooling
+- Enhanced Redis client with better error handling
+- Updated metrics manager with standardized configuration
+
+### Fixed
+- Fixed type hints and linter errors in container module
+- Improved error handling in resource initialization
+- Better handling of optional Redis configuration
+
+## [0.1.18] - 2024-01-11
 
 ### Added
 - Added retry mechanism using tenacity for database operations
