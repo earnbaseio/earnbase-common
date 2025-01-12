@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from fastapi import status
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -12,17 +13,17 @@ class BaseResponse(BaseModel):
     meta: Optional[Dict[str, Any]] = Field(None, description="Response metadata")
 
 
-class SuccessResponse(BaseResponse):
+class SuccessResponse(BaseModel):
     """Success response model."""
 
-    success: bool = Field(True, description="Request was successful")
+    message: str = Field(..., description="Response message")
     data: Optional[Any] = Field(None, description="Response data")
+    status: int = Field(default=status.HTTP_200_OK, description="HTTP status code")
 
-    
-class ErrorResponse(BaseResponse):
+
+class ErrorResponse(BaseModel):
     """Error response model."""
 
-    success: bool = Field(False, description="Request failed")
     code: str = Field(..., description="Error code")
     error: str = Field(..., description="Error message")
     details: Optional[Dict[str, Any]] = Field(None, description="Error details")
@@ -44,7 +45,7 @@ class PaginationMetadata(BaseModel):
     )
 
 
-class PaginatedResponse(BaseResponse):
+class PaginatedResponse(BaseModel):
     """Paginated response model."""
 
     data: List[Any] = Field(description="List of items")

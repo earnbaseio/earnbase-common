@@ -1,6 +1,6 @@
 [project]
 name = "earnbase-common"
-version = "0.2.8"
+version = "0.2.10"
 description = "Common utilities for Earnbase services"
 authors = [
     {name = "Earnbase Team", email = "dev@earnbase.io"},

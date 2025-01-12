@@ -38,7 +38,8 @@ class MetadataMiddleware(BaseHTTPMiddleware):
         # Add metadata to response
         if hasattr(response, "body"):
             try:
-                body = response.body.decode()
+                # Convert memoryview to bytes before decoding
+                body = bytes(response.body).decode()
                 if body:
                     metadata = self._create_metadata(request)
                     # Update response body with metadata
