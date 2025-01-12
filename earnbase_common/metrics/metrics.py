@@ -44,7 +44,7 @@ class MetricsManager:
         return f"{self.namespace}_{name}"
 
     def counter(
-        self, name: str, labels: Optional[Dict[str, str]] = None
+        self, name: str, labelnames: Optional[List[str]] = None
     ) -> PrometheusCounter:
         """Get or create counter metric."""
         metric_name = self._format_name(name)
@@ -52,12 +52,9 @@ class MetricsManager:
             self._counters[metric_name] = PrometheusCounter(
                 metric_name,
                 name,
-                list(labels.keys()) if labels else [],
+                labelnames=labelnames or [],
             )
-        counter = self._counters[metric_name]
-        if labels:
-            counter = counter.labels(**labels)
-        return counter
+        return self._counters[metric_name]
 
     def histogram(
         self,
@@ -77,38 +74,30 @@ class MetricsManager:
         return self._histograms[metric_name]
 
     def gauge(
-        self, name: str, labels: Optional[Dict[str, str]] = None
+        self, name: str, labelnames: Optional[List[str]] = None
     ) -> PrometheusGauge:
         """Get or create gauge metric."""
         metric_name = self._format_name(name)
         if metric_name not in self._gauges:
-            label_names = list(labels.keys()) if labels else []
             self._gauges[metric_name] = PrometheusGauge(
                 metric_name,
                 metric_name,
-                labelnames=label_names,
+                labelnames=labelnames or [],
             )
-        gauge = self._gauges[metric_name]
-        if labels:
-            return gauge.labels(**labels)
-        return gauge
+        return self._gauges[metric_name]
 
     def summary(
-        self, name: str, labels: Optional[Dict[str, str]] = None
+        self, name: str, labelnames: Optional[List[str]] = None
     ) -> PrometheusSummary:
         """Get or create summary metric."""
         metric_name = self._format_name(name)
         if metric_name not in self._summaries:
-            label_names = list(labels.keys()) if labels else []
             self._summaries[metric_name] = PrometheusSummary(
                 metric_name,
                 metric_name,
-                labelnames=label_names,
+                labelnames=labelnames or [],
             )
-        summary = self._summaries[metric_name]
-        if labels:
-            return summary.labels(**labels)
-        return summary
+        return self._summaries[metric_name]
 
 
 class MetricsDecorator:
@@ -118,13 +107,13 @@ class MetricsDecorator:
         """Initialize metrics decorator."""
         self.metrics = metrics_manager
 
-    def counter(self, name: str, labels: Optional[Dict[str, str]] = None) -> Callable:
+    def counter(self, name: str, labelnames: Optional[List[str]] = None) -> Callable:
         """Counter decorator."""
 
         def decorator(func: Callable) -> Callable:
             @wraps(func)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
-                metric = self.metrics.counter(name, labels)
+                metric = self.metrics.counter(name, labelnames)
                 try:
                     result = func(*args, **kwargs)
                     metric.inc()
@@ -171,7 +160,7 @@ db_operation_latency = metrics.histogram(
 )
 db_operation_count = metrics.counter(
     "db_operations_total",
-    {"operation": "", "collection": ""},
+    labelnames=["operation", "collection"],
 )
 
 # HTTP metrics
@@ -182,25 +171,25 @@ http_request_latency = metrics.histogram(
 )
 http_request_count = metrics.counter(
     "http_requests_total",
-    {"method": "", "path": "", "status": ""},
+    labelnames=["method", "path", "status"],
 )
 http_request_in_progress = metrics.gauge(
     "http_requests_in_progress",
-    {"method": "", "path": ""},
+    labelnames=["method", "path"],
 )
 http_request_size = metrics.summary(
     "http_request_size_bytes",
-    {"method": "", "path": ""},
+    labelnames=["method", "path"],
 )
 http_response_size = metrics.summary(
     "http_response_size_bytes",
-    {"method": "", "path": ""},
+    labelnames=["method", "path"],
 )
 
 # Service metrics
 service_info = metrics.gauge(
     "service_info",
-    {"version": "", "environment": ""},
+    labelnames=["version", "environment"],
 )
 service_uptime = metrics.gauge(
     "service_uptime_seconds",
