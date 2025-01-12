@@ -1,161 +1,138 @@
 """Redis client module."""
 
-import json
-from typing import Any, Optional
+from typing import Optional
 
-import aioredis
-from aioredis.exceptions import ConnectionError as RedisConnectionError
-from aioredis.exceptions import RedisError
+import redis.asyncio as redis
 from earnbase_common.logging import get_logger
-from earnbase_common.retry import RetryConfig, with_retry
 
 logger = get_logger(__name__)
 
-# Default retry config for Redis operations
-DEFAULT_RETRY_CONFIG = RetryConfig(
-    max_attempts=3,
-    max_delay=5.0,
-    min_delay=1.0,
-    exceptions=(RedisConnectionError, RedisError),
-)
-
 
 class RedisClient:
-    """Redis client."""
+    """Redis client wrapper."""
 
-    def __init__(self):
-        """Initialize client."""
-        self._client: Optional[aioredis.Redis] = None
+    def __init__(self) -> None:
+        """Initialize Redis client."""
+        self._client: Optional[redis.Redis] = None
         self._prefix: str = ""
         self._ttl: int = 3600
-        self._retry_config = DEFAULT_RETRY_CONFIG
 
+    @classmethod
     async def connect(
-        self,
+        cls,
         url: str,
         db: int = 0,
         prefix: str = "",
         ttl: int = 3600,
-        retry_config: Optional[RetryConfig] = None,
-    ) -> None:
+    ) -> "RedisClient":
         """Connect to Redis."""
-        if retry_config:
-            self._retry_config = retry_config
+        logger.info("connecting_to_redis", url=url, db=db)
 
+        instance = cls()
         try:
+            instance._client = redis.from_url(url, db=db, decode_responses=True)
+            instance._prefix = prefix
+            instance._ttl = ttl
 
-            async def _connect():
-                self._client = await aioredis.from_url(
-                    url,
-                    db=db,
-                    encoding="utf-8",
-                    decode_responses=True,
-                )
-                self._prefix = prefix
-                self._ttl = ttl
+            # Test connection
+            await instance._client.ping()
+            logger.info("redis_connected")
 
-                # Test connection
-                await self._client.ping()
+            return instance
 
-                logger.info(
-                    "redis_connected",
-                    url=url,
-                    database=db,
-                    prefix=prefix,
-                )
-
-            await with_retry("redis_connect", self._retry_config, _connect())
         except Exception as e:
-            logger.error(
-                "redis_connection_failed",
-                error=str(e),
-                url=url,
-                database=db,
-            )
+            logger.error("redis_connection_failed", error=str(e))
             raise
 
     async def close(self) -> None:
         """Close Redis connection."""
         if self._client:
             await self._client.close()
+            self._client = None
             logger.info("redis_disconnected")
 
     def _get_key(self, key: str) -> str:
         """Get prefixed key."""
-        return f"{self._prefix}{key}"
+        return f"{self._prefix}:{key}" if self._prefix else key
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[str]:
         """Get value from Redis."""
         if not self._client:
-            raise RuntimeError("Redis connection not initialized")
+            raise RuntimeError("Redis client not initialized")
 
         try:
-            value = await with_retry(
-                "redis_get", self._retry_config, self._client.get(self._get_key(key))
-            )
-            return json.loads(value) if value else None
+            value = await self._client.get(self._get_key(key))
+            return value
+
         except Exception as e:
-            logger.error("redis_get_failed", error=str(e), key=key)
-            return None
+            logger.error("redis_get_failed", key=key, error=str(e))
+            raise
 
     async def set(
         self,
         key: str,
-        value: Any,
-        ttl: Optional[int] = None,
-    ) -> bool:
+        value: str,
+        expire: Optional[int] = None,
+    ) -> None:
         """Set value in Redis."""
         if not self._client:
-            raise RuntimeError("Redis connection not initialized")
+            raise RuntimeError("Redis client not initialized")
 
         try:
-            await with_retry(
-                "redis_set",
-                self._retry_config,
-                self._client.set(
-                    self._get_key(key),
-                    json.dumps(value),
-                    ex=ttl or self._ttl,
-                ),
+            await self._client.set(
+                self._get_key(key),
+                value,
+                ex=expire or self._ttl,
             )
-            return True
-        except Exception as e:
-            logger.error("redis_set_failed", error=str(e), key=key)
-            return False
 
-    async def delete(self, key: str) -> bool:
-        """Delete value from Redis."""
+        except Exception as e:
+            logger.error("redis_set_failed", key=key, error=str(e))
+            raise
+
+    async def delete(self, key: str) -> None:
+        """Delete key from Redis."""
         if not self._client:
-            raise RuntimeError("Redis connection not initialized")
+            raise RuntimeError("Redis client not initialized")
 
         try:
-            await with_retry(
-                "redis_delete",
-                self._retry_config,
-                self._client.delete(self._get_key(key)),
-            )
-            return True
+            await self._client.delete(self._get_key(key))
+
         except Exception as e:
-            logger.error("redis_delete_failed", error=str(e), key=key)
-            return False
+            logger.error("redis_delete_failed", key=key, error=str(e))
+            raise
 
     async def exists(self, key: str) -> bool:
         """Check if key exists in Redis."""
         if not self._client:
-            raise RuntimeError("Redis connection not initialized")
+            raise RuntimeError("Redis client not initialized")
 
         try:
-            return bool(
-                await with_retry(
-                    "redis_exists",
-                    self._retry_config,
-                    self._client.exists(self._get_key(key)),
-                )
-            )
+            return bool(await self._client.exists(self._get_key(key)))
+
         except Exception as e:
-            logger.error("redis_exists_failed", error=str(e), key=key)
-            return False
+            logger.error("redis_exists_failed", key=key, error=str(e))
+            raise
 
+    async def expire(self, key: str, seconds: int) -> None:
+        """Set key expiration."""
+        if not self._client:
+            raise RuntimeError("Redis client not initialized")
 
-# Global Redis instance
-redis_client = RedisClient()
+        try:
+            await self._client.expire(self._get_key(key), seconds)
+
+        except Exception as e:
+            logger.error("redis_expire_failed", key=key, error=str(e))
+            raise
+
+    async def ttl(self, key: str) -> int:
+        """Get key TTL."""
+        if not self._client:
+            raise RuntimeError("Redis client not initialized")
+
+        try:
+            return await self._client.ttl(self._get_key(key))
+
+        except Exception as e:
+            logger.error("redis_ttl_failed", key=key, error=str(e))
+            raise

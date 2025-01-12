@@ -17,68 +17,23 @@ class BaseContainer(containers.DeclarativeContainer):
     config = providers.Singleton(BaseSettings)
 
     # Common providers
-    mongodb = providers.Singleton(
-        MongoDB,
+    mongodb = providers.Resource(
+        MongoDB.connect,
+        url=config.provided.MONGODB_URL,
+        db_name=config.provided.MONGODB_DB_NAME,
+        min_pool_size=config.provided.MONGODB_MIN_POOL_SIZE,
+        max_pool_size=config.provided.MONGODB_MAX_POOL_SIZE,
     )
 
-    redis = providers.Singleton(RedisClient)
+    redis = providers.Resource(
+        RedisClient.connect,
+        url=config.provided.REDIS_URL,
+        db=config.provided.REDIS_DB,
+        prefix=config.provided.REDIS_PREFIX,
+        ttl=config.provided.REDIS_TTL,
+    )
 
     metrics = providers.Singleton(
         MetricsManager,
         enabled=config.provided.METRICS_ENABLED,
     )
-
-    async def init_resources(self) -> None:
-        """Initialize container resources."""
-        logger.info("initializing_resources")
-
-        # Initialize MongoDB
-        mongodb = self.mongodb()
-        if not mongodb:
-            raise RuntimeError("Failed to initialize MongoDB client")
-
-        config = self.config()
-        mongodb_url = getattr(config, "MONGODB_URL", "mongodb://localhost:27017")
-        mongodb_db = getattr(config, "MONGODB_DB_NAME", "earnbase")
-
-        await mongodb.connect(
-            url=mongodb_url,
-            db_name=mongodb_db,
-            min_pool_size=getattr(config, "MONGODB_MIN_POOL_SIZE", 10),
-            max_pool_size=getattr(config, "MONGODB_MAX_POOL_SIZE", 100),
-        )
-
-        # Initialize Redis if configured
-        redis_url = getattr(config, "REDIS_URL", None)
-        if redis_url:
-            redis = self.redis()
-            if not redis:
-                raise RuntimeError("Failed to initialize Redis client")
-
-            await redis.connect(
-                url=redis_url,
-                db=getattr(config, "REDIS_DB", 0),
-                prefix=getattr(config, "REDIS_PREFIX", ""),
-                ttl=getattr(config, "REDIS_TTL", 3600),
-            )
-
-        logger.info("resources_initialized")
-
-    async def shutdown_resources(self) -> None:
-        """Shutdown container resources."""
-        logger.info("shutting_down_resources")
-
-        # Shutdown MongoDB
-        mongodb = self.mongodb()
-        if mongodb and mongodb.client:
-            await mongodb.close()
-
-        # Shutdown Redis if configured
-        config = self.config()
-        redis_url = getattr(config, "REDIS_URL", None)
-        if redis_url:
-            redis = self.redis()
-            if redis and redis._client:
-                await redis._client.close()
-
-        logger.info("resources_shutdown")
