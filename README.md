@@ -288,6 +288,42 @@ except Exception as e:
     logger.error("Failed to process request", error=str(e))
 ```
 
+## Database Operations
+
+The MongoDB client now includes a retry mechanism using tenacity. This helps handle temporary connection issues and improves reliability.
+
+### Retry Configuration
+
+You can customize the retry behavior:
+
+```python
+from earnbase_common.retry import RetryConfig
+from earnbase_common.database import mongodb
+
+# Custom retry config
+retry_config = RetryConfig(
+    max_attempts=5,
+    max_delay=10.0,
+    min_delay=1.0,
+    exceptions=(ConnectionError, TimeoutError)
+)
+
+# Apply to MongoDB client
+await mongodb.connect(
+    url="mongodb://localhost:27017",
+    db_name="earnbase",
+    retry_config=retry_config
+)
+```
+
+Default retry configuration:
+- Max attempts: 3
+- Max delay: 5 seconds
+- Min delay: 1 second
+- Retried exceptions: ConnectionFailure, ServerSelectionTimeoutError
+
+All database operations (find, insert, update, delete) automatically use the configured retry mechanism.
+
 ## Project Structure
 
 ```

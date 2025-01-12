@@ -80,3 +80,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated README.md
 - Updated pyproject.toml
 - Updated CHANGELOG.md
+
+## [0.1.18] - 2024-01-12
+
+### Added
+- Added retry mechanism using tenacity for database operations
+- Added type hints improvements for MongoDB client
+- Added better error handling for database connections
+
+### Fixed
+- Fixed type checking issues in MongoDB client
+- Fixed potential None access in database operations
+- Fixed connection handling in MongoDB client
