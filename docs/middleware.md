@@ -2,275 +2,230 @@
 
 ## Overview
 
-The middleware module provides FastAPI middleware components for:
-- Request tracking and logging
-- Security headers management
-- Performance monitoring
-- Request/Response transformation
+The middleware module provides FastAPI middleware components for common functionality like security headers, request tracking, and metrics collection. These middleware components can be easily added to any FastAPI application.
 
 ## Features
 
-### Request Tracking
+### Security Headers Middleware
+
+Adds security headers to all responses:
 
 ```python
-from earnbase_common.middleware import RequestTrackingMiddleware
 from fastapi import FastAPI
+from earnbase_common.middleware import SecurityHeadersMiddleware
+
+app = FastAPI()
+app.add_middleware(SecurityHeadersMiddleware)
+```
+
+Added security headers:
+- X-Content-Type-Options: nosniff
+- X-Frame-Options: DENY
+- X-XSS-Protection: 1; mode=block
+- Strict-Transport-Security: max-age=31536000; includeSubDomains
+- Content-Security-Policy: Configurable CSP rules
+
+### Request Tracking Middleware
+
+Tracks and logs request details:
+
+```python
+from fastapi import FastAPI
+from earnbase_common.middleware import RequestTrackingMiddleware
 
 app = FastAPI()
 app.add_middleware(RequestTrackingMiddleware)
 
-# Features:
-# - Unique request ID generation
-# - Request timing
-# - Detailed request logging
-# - Request ID header injection
-
-# Example log output:
-{
-    "event": "request_processed",
-    "request_id": "550e8400-e29b-41d4-a716-446655440000",
-    "method": "GET",
-    "url": "http://api.example.com/users",
-    "status_code": 200,
-    "duration": 0.125,
-    "client_host": "192.168.1.1",
-    "user_agent": "Mozilla/5.0 ..."
-}
-
-# Response headers:
-# X-Request-ID: 550e8400-e29b-41d4-a716-446655440000
+@app.get("/users")
+async def get_users(request: Request):
+    # Access request ID
+    request_id = request.state.request_id
+    
+    # Access start time
+    start_time = request.state.start_time
+    
+    return {"request_id": request_id}
 ```
 
-### Security Headers
+Features:
+- Generates unique request ID
+- Tracks request duration
+- Logs request details (method, URL, status, duration)
+- Adds request ID to response headers
 
-```python
-from earnbase_common.middleware import SecurityHeadersMiddleware
-from fastapi import FastAPI
+## Usage
 
-app = FastAPI()
-app.add_middleware(SecurityHeadersMiddleware)
-
-# Added security headers:
-# - X-Content-Type-Options: nosniff
-# - X-Frame-Options: DENY
-# - X-XSS-Protection: 1; mode=block
-# - Strict-Transport-Security: max-age=31536000; includeSubDomains
-# - Content-Security-Policy: default-src 'self'; ...
-```
-
-## Best Practices
-
-### 1. Middleware Order
+### 1. Basic Setup
 
 ```python
 from fastapi import FastAPI
 from earnbase_common.middleware import (
-    RequestTrackingMiddleware,
-    SecurityHeadersMiddleware
+    SecurityHeadersMiddleware,
+    RequestTrackingMiddleware
 )
 
 app = FastAPI()
 
-# Order matters - first added = outer layer
-app.add_middleware(RequestTrackingMiddleware)  # Executes first
-app.add_middleware(SecurityHeadersMiddleware)  # Executes second
+# Add middleware in order
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestTrackingMiddleware)
 ```
 
-### 2. Error Handling
+### 2. Request Context
+
+Access request context in route handlers:
 
 ```python
-from fastapi import FastAPI, Request
-from earnbase_common.middleware import BaseMiddleware
+@app.get("/api/data")
+async def get_data(request: Request):
+    # Access request tracking info
+    request_id = request.state.request_id
+    start_time = request.state.start_time
+    
+    logger.info(
+        "Processing request",
+        request_id=request_id,
+        path="/api/data"
+    )
+    
+    return {"data": "value"}
+```
+
+### 3. Custom Headers
+
+Add custom security headers:
+
+```python
+from fastapi import FastAPI
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class CustomHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        
+        # Add custom headers
+        response.headers["X-Custom-Header"] = "value"
+        
+        return response
+
+app = FastAPI()
+app.add_middleware(CustomHeadersMiddleware)
+```
+
+## Best Practices
+
+1. **Middleware Order**:
+   - Add security middleware first
+   - Add request tracking early in the chain
+   - Consider dependencies between middleware
+
+2. **Performance**:
+   - Keep middleware logic lightweight
+   - Avoid blocking operations
+   - Use async operations when possible
+
+3. **Error Handling**:
+   - Handle exceptions in middleware
+   - Preserve error responses
+   - Log middleware errors properly
+
+4. **Security**:
+   - Validate and sanitize headers
+   - Use secure defaults
+   - Follow security best practices
+
+## Examples
+
+### 1. Complete Middleware Stack
+
+```python
+from fastapi import FastAPI
+from earnbase_common.middleware import (
+    SecurityHeadersMiddleware,
+    RequestTrackingMiddleware
+)
 from earnbase_common.logging import get_logger
 
 logger = get_logger(__name__)
 
-class ErrorHandlingMiddleware(BaseMiddleware):
+app = FastAPI()
+
+# Add security headers
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Add request tracking
+app.add_middleware(RequestTrackingMiddleware)
+
+@app.get("/api/users")
+async def get_users(request: Request):
+    logger.info(
+        "Getting users",
+        request_id=request.state.request_id
+    )
+    return {"users": []}
+```
+
+### 2. Custom Tracking Middleware
+
+```python
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Middleware for collecting metrics."""
+    
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+        self.metrics = get_metrics()
+    
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: RequestResponseEndpoint
+    ) -> Response:
+        # Track request
+        with self.metrics.request_duration.labels(
+            method=request.method,
+            path=request.url.path
+        ).time():
+            response = await call_next(request)
+            
+        # Update metrics
+        self.metrics.request_count.labels(
+            method=request.method,
+            path=request.url.path,
+            status=response.status_code
+        ).inc()
+        
+        return response
+```
+
+### 3. Error Handling Middleware
+
+```python
+class ErrorHandlingMiddleware(BaseHTTPMiddleware):
+    """Middleware for handling errors."""
+    
     async def dispatch(
         self,
         request: Request,
         call_next: RequestResponseEndpoint
     ) -> Response:
         try:
-            response = await call_next(request)
-            return response
+            return await call_next(request)
+            
         except Exception as e:
             logger.error(
-                "request_failed",
+                "Request failed",
+                request_id=request.state.request_id,
                 error=str(e),
-                request_id=request.state.request_id
+                exc_info=True
             )
-            raise
-```
-
-### 3. Performance Considerations
-
-```python
-from fastapi import FastAPI, Request
-from earnbase_common.middleware import BaseMiddleware
-from earnbase_common.metrics import metrics
-
-class PerformanceMiddleware(BaseMiddleware):
-    async def dispatch(
-        self,
-        request: Request,
-        call_next: RequestResponseEndpoint
-    ) -> Response:
-        with metrics.request_latency.time():
-            response = await call_next(request)
             
-        # Track response size
-        size = len(response.body)
-        metrics.response_size.observe(size)
-        
-        return response
+            # Return error response
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "Internal server error",
+                    "request_id": request.state.request_id
+                }
+            )
 ```
-
-## Future Features
-
-### 1. Rate Limiting
-
-```python
-class RateLimitMiddleware(BaseMiddleware):
-    """Rate limit requests by IP or token."""
-    
-    def __init__(
-        self,
-        app: ASGIApp,
-        rate_limit: int,
-        time_window: int
-    ):
-        """Initialize rate limiter."""
-        super().__init__(app)
-        self.rate_limit = rate_limit
-        self.time_window = time_window
-    
-    async def is_rate_limited(
-        self,
-        key: str
-    ) -> bool:
-        """Check if request is rate limited."""
-        pass
-    
-    async def update_rate_limit(
-        self,
-        key: str
-    ) -> None:
-        """Update rate limit counters."""
-        pass
-```
-
-### 2. Request Validation
-
-```python
-class ValidationMiddleware(BaseMiddleware):
-    """Validate requests before processing."""
-    
-    async def validate_headers(
-        self,
-        headers: Dict[str, str]
-    ) -> None:
-        """Validate request headers."""
-        pass
-    
-    async def validate_payload(
-        self,
-        body: bytes
-    ) -> None:
-        """Validate request payload."""
-        pass
-    
-    async def validate_query_params(
-        self,
-        params: Dict[str, str]
-    ) -> None:
-        """Validate query parameters."""
-        pass
-```
-
-### 3. Caching
-
-```python
-class CacheMiddleware(BaseMiddleware):
-    """Cache responses for GET requests."""
-    
-    async def get_cached_response(
-        self,
-        key: str
-    ) -> Optional[Response]:
-        """Get cached response."""
-        pass
-    
-    async def cache_response(
-        self,
-        key: str,
-        response: Response,
-        ttl: int
-    ) -> None:
-        """Cache response with TTL."""
-        pass
-    
-    async def should_cache(
-        self,
-        request: Request,
-        response: Response
-    ) -> bool:
-        """Determine if response should be cached."""
-        pass
-```
-
-### 4. Authentication
-
-```python
-class AuthMiddleware(BaseMiddleware):
-    """Handle authentication and token validation."""
-    
-    async def validate_token(
-        self,
-        token: str
-    ) -> Dict[str, Any]:
-        """Validate authentication token."""
-        pass
-    
-    async def get_user(
-        self,
-        token_data: Dict[str, Any]
-    ) -> Optional[User]:
-        """Get user from token data."""
-        pass
-    
-    async def refresh_token(
-        self,
-        token: str
-    ) -> str:
-        """Refresh authentication token."""
-        pass
-```
-
-### 5. Request Transformation
-
-```python
-class TransformMiddleware(BaseMiddleware):
-    """Transform requests and responses."""
-    
-    async def transform_request(
-        self,
-        request: Request
-    ) -> Request:
-        """Transform incoming request."""
-        pass
-    
-    async def transform_response(
-        self,
-        response: Response
-    ) -> Response:
-        """Transform outgoing response."""
-        pass
-    
-    async def compress_response(
-        self,
-        response: Response
-    ) -> Response:
-        """Compress response data."""
-        pass
 ``` 

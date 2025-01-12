@@ -2,13 +2,13 @@
 
 ## Overview
 
-The HTTP module provides two main components:
-1. A robust HTTP client for making external requests
-2. Utilities and components for building HTTP APIs using FastAPI
+The HTTP module provides a robust HTTP client implementation using `httpx` for making HTTP requests. It includes automatic error handling, logging, and common functionality like health checks and metrics collection.
 
 ## Features
 
-### HTTP Client
+### Base HTTP Client
+
+The `BaseHttpClient` class provides a foundation for making HTTP requests:
 
 ```python
 from earnbase_common.http import BaseHttpClient
@@ -19,268 +19,186 @@ client = BaseHttpClient(
     base_url=AnyHttpUrl("https://api.example.com")
 )
 
-# Make GET request
-data = await client._get("/users")
-
-# Make POST request
-response = await client._post(
-    "/users",
-    json={"name": "John"}
-)
+# Make requests
+data = await client.get("/users")
+result = await client.post("/users", json={"name": "John"})
 
 # Health check
 health = await client.health_check()
+print(health)  # {"status": "healthy"}
 
 # Get metrics
 metrics = await client.get_metrics()
+print(metrics)  # {"requests": 100, "errors": 0}
 
 # Close client
 await client.close()
 ```
 
-### FastAPI Components
+## Key Features
 
-#### Request Context
+### 1. Automatic Error Handling
+
+Built-in error handling and logging:
 
 ```python
-from earnbase_common.http import RequestContext
-from fastapi import Request
-from typing import Optional
-
-class APIRequestContext(RequestContext):
-    """API request context."""
-    
-    def __init__(self, request: Request):
-        """Initialize context."""
-        self.request = request
-        self.request_id = self.generate_request_id()
-        self.start_time = time.time()
-        self.user = None
-        self.tenant = None
-    
-    def generate_request_id(self) -> str:
-        """Generate unique request ID."""
-        return str(uuid.uuid4())
-    
-    def get_user(self) -> Optional[dict]:
-        """Get authenticated user."""
-        return self.user
-    
-    def set_user(self, user: dict) -> None:
-        """Set authenticated user."""
-        self.user = user
-
-# Usage in middleware
-@app.middleware("http")
-async def context_middleware(
-    request: Request,
-    call_next: RequestHandler
-):
-    """Setup request context."""
-    context = APIRequestContext(request)
-    request.state.context = context
-    return await call_next(request)
+try:
+    data = await client.get("/users")
+    if data is None:
+        # Request failed, error was logged
+        handle_error()
+except Exception as e:
+    logger.error("Request failed", error=str(e))
 ```
 
-#### API Router
+### 2. Type Safety
+
+Type hints and Pydantic models for request/response data:
 
 ```python
-from earnbase_common.http import APIRouter
-from earnbase_common.responses import Response
+from pydantic import BaseModel, AnyHttpUrl
+from typing import Optional, Dict, Any
 
-router = APIRouter()
-
-@router.get("/users")
-async def list_users() -> Response:
-    users = await user_service.list_users()
-    return Response(data=users)
-```
-
-#### Request Validation
-
-```python
-from earnbase_common.http import RequestValidator
-from pydantic import BaseModel, validator
-
-class CreateUserRequest(BaseModel):
-    """Create user request model."""
+class User(BaseModel):
+    name: str
     email: str
-    password: str
-    
-    @validator("email")
-    def validate_email(cls, v: str) -> str:
-        """Validate email format."""
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", v):
-            raise ValidationError("Invalid email format")
-        return v
 
-# Usage in route handlers
-@router.post("/users")
-async def create_user(data: CreateUserRequest) -> Response:
-    user = await user_service.create_user(
-        email=data.email,
-        password=data.password
-    )
-    return Response(data=user)
+class UserClient(BaseHttpClient):
+    async def create_user(self, user: User) -> Optional[Dict[str, Any]]:
+        return await self._post("/users", json=user.model_dump())
+
+    async def get_user(self, user_id: str) -> Optional[User]:
+        data = await self._get(f"/users/{user_id}")
+        return User(**data) if data else None
+```
+
+### 3. Health Checks
+
+Built-in health check support:
+
+```python
+async def check_service_health():
+    client = BaseHttpClient(base_url="https://api.example.com")
+    health = await client.health_check()
+    
+    if health["status"] == "healthy":
+        logger.info("Service is healthy")
+    else:
+        logger.error("Service is unhealthy")
+```
+
+### 4. Metrics Collection
+
+Automatic metrics collection:
+
+```python
+async def collect_metrics():
+    client = BaseHttpClient(base_url="https://api.example.com")
+    metrics = await client.get_metrics()
+    
+    # Process metrics
+    requests = metrics.get("requests", 0)
+    errors = metrics.get("errors", 0)
+    latency = metrics.get("latency", {})
 ```
 
 ## Best Practices
 
-### 1. HTTP Client Usage
+1. **Resource Management**:
+   - Always close clients when done
+   - Use async context managers when possible
+   - Handle connection timeouts properly
+
+2. **Error Handling**:
+   - Check for None return values
+   - Log errors with context
+   - Handle network errors gracefully
+
+3. **Type Safety**:
+   - Use Pydantic models for request/response data
+   - Add proper type hints
+   - Validate URLs with AnyHttpUrl
+
+4. **Performance**:
+   - Reuse client instances
+   - Configure appropriate timeouts
+   - Use connection pooling for multiple requests
+
+5. **Security**:
+   - Use HTTPS for all requests
+   - Handle sensitive data properly
+   - Validate server certificates
+
+## Examples
+
+### 1. Extended Client
 
 ```python
-# Use context manager for automatic cleanup
-async with httpx.AsyncClient() as client:
-    response = await client.get("https://api.example.com")
-    data = response.json()
-
-# Configure timeouts
-client = BaseHttpClient(
-    base_url="https://api.example.com",
-    timeout=30.0
-)
-
-# Handle errors gracefully
-try:
-    response = await client._get("/users")
-    if response is None:
-        logger.error("Request failed")
-    else:
-        process_data(response)
-finally:
-    await client.close()
+class APIClient(BaseHttpClient):
+    """Extended API client with custom methods."""
+    
+    async def get_users(
+        self,
+        page: int = 1,
+        limit: int = 10
+    ) -> Optional[Dict[str, Any]]:
+        """Get paginated users."""
+        return await self._get(
+            f"/users?page={page}&limit={limit}"
+        )
+    
+    async def create_user(
+        self,
+        user_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Create new user."""
+        return await self._post(
+            "/users",
+            json=user_data
+        )
 ```
 
-### 2. API Development
+### 2. Service Client
 
 ```python
-# Use dependency injection
-def get_user_service(request: Request) -> UserService:
-    return request.app.state.user_service
-
-@router.get("/users/{user_id}")
-async def get_user(
-    user_id: str,
-    service: UserService = Depends(get_user_service)
-) -> Response:
-    user = await service.get_user(user_id)
-    return Response(data=user)
-
-# Add response documentation
-@router.post(
-    "/users",
-    response_model=Response[User],
-    responses={
-        400: {"model": ErrorResponse},
-        401: {"model": ErrorResponse}
-    }
-)
-async def create_user(data: CreateUserRequest) -> Response:
-    pass
+class ServiceClient(BaseHttpClient):
+    """Client for internal service communication."""
+    
+    async def notify(
+        self,
+        event: str,
+        payload: Dict[str, Any]
+    ) -> bool:
+        """Send notification to service."""
+        result = await self._post(
+            "/events",
+            json={
+                "event": event,
+                "payload": payload
+            }
+        )
+        return result is not None
 ```
 
-## Future Features
-
-### 1. Enhanced HTTP Client
+### 3. Authenticated Client
 
 ```python
-class EnhancedHttpClient(BaseHttpClient):
-    """Enhanced HTTP client with additional features."""
+class AuthClient(BaseHttpClient):
+    """Client with authentication."""
     
     def __init__(
         self,
         base_url: AnyHttpUrl,
-        retry_config: RetryConfig,
-        auth_config: AuthConfig,
-        cache_config: CacheConfig
+        api_key: str
     ):
-        """Initialize enhanced client."""
+        """Initialize with API key."""
         super().__init__(base_url)
-        self.retry_config = retry_config
-        self.auth_config = auth_config
-        self.cache_config = cache_config
+        self.client.headers["Authorization"] = f"Bearer {api_key}"
+    
+    async def get_protected_resource(
+        self
+    ) -> Optional[Dict[str, Any]]:
+        """Get protected resource."""
+        return await self._get("/protected")
 ```
-
-### 2. API Versioning
-
-```python
-class VersionedAPIRouter(APIRouter):
-    """Router with API versioning."""
-    
-    def __init__(self, version: str):
-        """Initialize router."""
-        super().__init__(prefix=f"/v{version}")
-```
-
-### 3. Rate Limiting
-
-```python
-class RateLimiter:
-    """Rate limit requests."""
-    
-    async def check_limit(
-        self,
-        key: str,
-        limit: int,
-        window: int
-    ) -> bool:
-        """Check if request is within limit."""
-        pass
-```
-
-### 4. Circuit Breaker
-
-```python
-class CircuitBreaker:
-    """Circuit breaker for external calls."""
-    
-    async def call(
-        self,
-        func: Callable,
-        fallback: Optional[Callable] = None
-    ) -> Any:
-        """Make call with circuit breaker."""
-        pass
-```
-
-### 5. Request Tracing
-
-```python
-class RequestTracer:
-    """Trace requests across services."""
-    
-    def start_span(
-        self,
-        name: str,
-        parent_id: Optional[str] = None
-    ) -> str:
-        """Start new trace span."""
-        pass
-    
-    def end_span(self, span_id: str) -> None:
-        """End trace span."""
-        pass
-```
-
-### 6. GraphQL Support
-
-```python
-class GraphQLRouter(APIRouter):
-    """Router for GraphQL endpoints."""
-    
-    def add_query(
-        self,
-        name: str,
-        resolver: Callable
-    ) -> None:
-        """Add GraphQL query."""
-        pass
-    
-    def add_mutation(
-        self,
-        name: str,
-        resolver: Callable
-    ) -> None:
-        """Add GraphQL mutation."""
-        pass
 ``` 

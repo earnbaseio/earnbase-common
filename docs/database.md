@@ -2,45 +2,150 @@
 
 ## Overview
 
-The database module provides a high-level interface for working with MongoDB in an asynchronous way. It includes connection management, CRUD operations, and a generic repository pattern with built-in metrics and logging.
+The database module provides a robust MongoDB integration with repository pattern support. It includes automatic retries, connection pooling, metrics collection, and type-safe operations.
 
 ## Features
 
-### MongoDB Connection
+### MongoDB Client
+
+The `MongoDB` class provides a high-level interface for MongoDB operations:
 
 ```python
-from earnbase_common.database import mongodb
-from earnbase_common.config import BaseSettings
+from earnbase_common.database import MongoDB
 
-# Configure MongoDB
-settings = BaseSettings("config.yaml")
+# Initialize and connect
+mongodb = MongoDB()
 await mongodb.connect(
-    url=settings.MONGODB_URL,
-    db_name=settings.MONGODB_DB_NAME,
-    min_pool_size=settings.MONGODB_MIN_POOL_SIZE,
-    max_pool_size=settings.MONGODB_MAX_POOL_SIZE
+    url="mongodb://localhost:27017",
+    db_name="mydb",
+    min_pool_size=10,
+    max_pool_size=100
 )
 
-# Check connection
-is_connected = await mongodb.ping()
-
-# Close connection
-await mongodb.close()
+# Basic operations
+doc = await mongodb.find_one("users", {"email": "user@example.com"})
+docs = await mongodb.find_many("users", {"status": "active"}, limit=10)
+user_id = await mongodb.insert_one("users", {"name": "John"})
 ```
 
-### Basic CRUD Operations
+### Repository Pattern
+
+The `BaseRepository` provides a type-safe repository pattern implementation:
 
 ```python
-from earnbase_common.database import mongodb
-from typing import Dict, Any
+from earnbase_common.database import BaseRepository
+from pydantic import BaseModel
 
-# Find operations
-user = await mongodb.find_one(
-    collection="users",
-    query={"email": "user@example.com"}
+class User(BaseModel):
+    name: str
+    email: str
+    status: str = "active"
+
+class UserRepository(BaseRepository[User]):
+    """User repository."""
+    
+    def __init__(self, mongodb: MongoDB):
+        """Initialize repository."""
+        super().__init__(
+            collection=mongodb.db["users"],
+            model=User
+        )
+
+# Usage
+repo = UserRepository(mongodb)
+user = await repo.find_one({"email": "user@example.com"})
+users = await repo.find_many({"status": "active"})
+```
+
+## Key Features
+
+### 1. Automatic Retries
+
+MongoDB operations are automatically retried with configurable settings:
+
+```python
+from earnbase_common.retry import RetryConfig
+
+retry_config = RetryConfig(
+    max_attempts=3,
+    max_delay=5.0,
+    min_delay=1.0,
+    exceptions=(ConnectionFailure, ServerSelectionTimeoutError)
 )
 
-users = await mongodb.find_many(
+mongodb = MongoDB()
+await mongodb.connect(
+    url="mongodb://localhost:27017",
+    db_name="mydb",
+    retry_config=retry_config
+)
+```
+
+### 2. Connection Pooling
+
+Built-in connection pooling support:
+
+```python
+# Configure pool size
+mongodb = MongoDB()
+await mongodb.connect(
+    url="mongodb://localhost:27017",
+    db_name="mydb",
+    min_pool_size=10,  # Minimum connections
+    max_pool_size=100  # Maximum connections
+)
+```
+
+### 3. Metrics Collection
+
+Automatic metrics collection for database operations:
+
+```python
+# Metrics are automatically collected
+with db_operation_latency.labels(
+    operation="find_one",
+    collection=self.collection.name
+).time():
+    result = await self.collection.find_one(filter)
+    db_operation_count.labels(
+        operation="find_one",
+        collection=self.collection.name
+    ).inc()
+```
+
+### 4. Type Safety
+
+Repository pattern with Pydantic models for type safety:
+
+```python
+class Product(BaseModel):
+    name: str
+    price: float
+    stock: int = 0
+
+class ProductRepository(BaseRepository[Product]):
+    """Product repository with type safety."""
+    pass
+
+# Type-safe operations
+product = await repo.find_one({"name": "Phone"})
+print(product.price)  # Type hints work
+```
+
+## Basic Operations
+
+### 1. Query Operations
+
+```python
+# Find one document
+doc = await mongodb.find_one(
+    collection="users",
+    query={"email": "user@example.com"},
+    projection={"password": 0}
+)
+
+# Find many documents
+docs = await mongodb.find_many(
     collection="users",
     query={"status": "active"},
     sort=[("created_at", -1)],
@@ -48,59 +153,105 @@ users = await mongodb.find_many(
     limit=10
 )
 
-# Insert operations
-user_id = await mongodb.insert_one(
-    collection="users",
-    document={"email": "new@example.com"}
-)
-
-user_ids = await mongodb.insert_many(
-    collection="users",
-    documents=[
-        {"email": "user1@example.com"},
-        {"email": "user2@example.com"}
-    ]
-)
-
-# Update operations
-modified_count = await mongodb.update_one(
-    collection="users",
-    query={"_id": user_id},
-    update={"$set": {"status": "inactive"}},
-    upsert=False
-)
-
-# Delete operations
-deleted_count = await mongodb.delete_one(
-    collection="users",
-    query={"_id": user_id}
-)
-
 # Count documents
-total = await mongodb.count_documents(
+count = await mongodb.count_documents(
     collection="users",
     query={"status": "active"}
 )
 ```
 
-### Generic Repository
+### 2. Write Operations
 
 ```python
-from earnbase_common.database import BaseRepository
-from pydantic import BaseModel
-from typing import Optional
+# Insert operations
+doc_id = await mongodb.insert_one(
+    collection="users",
+    document={"name": "John", "email": "john@example.com"}
+)
 
-class User(BaseModel):
-    """User model."""
-    id: str
-    email: str
-    name: Optional[str] = None
-    status: str = "active"
-    created_at: datetime
-    updated_at: datetime
+doc_ids = await mongodb.insert_many(
+    collection="users",
+    documents=[
+        {"name": "Alice", "email": "alice@example.com"},
+        {"name": "Bob", "email": "bob@example.com"}
+    ]
+)
 
+# Update operations
+modified = await mongodb.update_one(
+    collection="users",
+    query={"email": "john@example.com"},
+    update={"$set": {"status": "active"}},
+    upsert=False
+)
+
+modified = await mongodb.update_many(
+    collection="users",
+    query={"status": "inactive"},
+    update={"$set": {"status": "active"}},
+    upsert=False
+)
+
+# Delete operations
+deleted = await mongodb.delete_one(
+    collection="users",
+    query={"email": "john@example.com"}
+)
+
+deleted = await mongodb.delete_many(
+    collection="users",
+    query={"status": "inactive"}
+)
+```
+
+### 3. Index Management
+
+```python
+# Create index
+index_name = await mongodb.create_index(
+    collection="users",
+    keys=[("email", 1)],
+    unique=True,
+    sparse=False,
+    background=True
+)
+
+# Drop index
+await mongodb.drop_index(
+    collection="users",
+    index_name="email_1"
+)
+
+# List indexes
+indexes = await mongodb.list_indexes(
+    collection="users"
+)
+```
+
+## Repository Pattern Usage
+
+### 1. Basic Repository
+
+```python
 class UserRepository(BaseRepository[User]):
-    """User repository."""
+    """Basic user repository."""
+    pass
+
+# Basic operations
+user = await repo.find_one({"email": "user@example.com"})
+users = await repo.find_many(
+    filter={"status": "active"},
+    skip=0,
+    limit=10,
+    sort=[("created_at", -1)]
+)
+```
+
+### 2. Extended Repository
+
+```python
+class UserRepository(BaseRepository[User]):
+    """Extended user repository with custom methods."""
     
     async def find_by_email(self, email: str) -> Optional[User]:
         """Find user by email."""
@@ -119,29 +270,12 @@ class UserRepository(BaseRepository[User]):
             sort=[("created_at", -1)]
         )
     
-    async def create_user(
-        self,
-        email: str,
-        name: Optional[str] = None
-    ) -> User:
-        """Create new user."""
-        return await self.create({
-            "email": email,
-            "name": name,
-            "status": "active"
-        })
-    
     async def deactivate_user(self, user_id: str) -> Optional[User]:
         """Deactivate user."""
         return await self.update(
             filter={"_id": user_id},
             data={"status": "inactive"}
         )
-
-# Usage
-user_repo = UserRepository(mongodb.db.users, User)
-user = await user_repo.create_user("user@example.com")
-users = await user_repo.find_active_users(limit=10)
 ```
 
 ## Best Practices
@@ -149,225 +283,55 @@ users = await user_repo.find_active_users(limit=10)
 ### 1. Connection Management
 
 ```python
-from earnbase_common.database import mongodb
-from contextlib import asynccontextmanager
-
-class DatabaseManager:
-    """Manage database connections."""
-    
-    def __init__(self, settings: BaseSettings):
-        """Initialize manager."""
-        self.settings = settings
-    
-    async def connect(self) -> None:
-        """Connect to database."""
+# In your application startup
+async def startup():
+    mongodb = MongoDB()
+    try:
         await mongodb.connect(
-            url=self.settings.MONGODB_URL,
-            db_name=self.settings.MONGODB_DB_NAME,
-            min_pool_size=self.settings.MONGODB_MIN_POOL_SIZE,
-            max_pool_size=self.settings.MONGODB_MAX_POOL_SIZE
+            url=settings.MONGODB_URL,
+            db_name=settings.MONGODB_DB_NAME
         )
-    
-    async def disconnect(self) -> None:
-        """Disconnect from database."""
-        await mongodb.close()
-    
-    @asynccontextmanager
-    async def connection(self):
-        """Get database connection."""
-        await self.connect()
-        try:
-            yield mongodb
-        finally:
-            await self.disconnect()
+        # Verify connection
+        if not await mongodb.ping():
+            raise ConnectionError("MongoDB connection failed")
+    except Exception as e:
+        logger.error("Failed to connect to MongoDB", error=str(e))
+        raise
 
-# Usage
-db_manager = DatabaseManager(settings)
-async with db_manager.connection() as db:
-    users = await db.find_many("users", {"status": "active"})
+# In your application shutdown
+async def shutdown():
+    await mongodb.close()
 ```
 
 ### 2. Error Handling
 
 ```python
-from earnbase_common.database import mongodb
-from pymongo.errors import PyMongoError
-from earnbase_common.errors import DatabaseError
-
-class DatabaseClient:
-    """Database client with error handling."""
-    
-    async def safe_operation(self, operation: str) -> Any:
-        """Execute database operation safely."""
-        try:
-            if not await mongodb.ping():
-                raise ConnectionError("Database not connected")
-                
-            result = await getattr(mongodb, operation)()
-            return result
-            
-        except PyMongoError as e:
-            logger.error(
-                "database_error",
-                operation=operation,
-                error=str(e)
-            )
-            raise DatabaseError(f"Database operation failed: {str(e)}")
-            
-        except Exception as e:
-            logger.error(
-                "unexpected_error",
-                operation=operation,
-                error=str(e)
-            )
-            raise
-
-# Usage
-client = DatabaseClient()
 try:
-    result = await client.safe_operation("find_one")
-except DatabaseError as e:
-    # Handle database error
-    pass
+    result = await mongodb.find_one("users", {"_id": "invalid-id"})
+except ConnectionError as e:
+    logger.error("MongoDB connection error", error=str(e))
+    raise
+except PyMongoError as e:
+    logger.error("MongoDB operation error", error=str(e))
+    raise
 ```
 
-### 3. Repository Pattern
+### 3. Repository Implementation
 
 ```python
-from earnbase_common.database import BaseRepository
-from typing import TypeVar, Generic
+class BaseUserRepository(Protocol):
+    """User repository protocol."""
+    
+    async def find_by_email(self, email: str) -> Optional[User]: ...
+    async def find_active_users(self) -> List[User]: ...
 
-T = TypeVar("T", bound=BaseModel)
-
-class Repository(Generic[T]):
-    """Generic repository interface."""
+class MongoUserRepository(BaseRepository[User], BaseUserRepository):
+    """MongoDB user repository implementation."""
     
-    async def find_by_id(self, id: str) -> Optional[T]:
-        """Find by ID."""
-        pass
+    async def find_by_email(self, email: str) -> Optional[User]:
+        return await self.find_one({"email": email})
     
-    async def find_all(self) -> List[T]:
-        """Find all."""
-        pass
-    
-    async def create(self, data: Dict[str, Any]) -> T:
-        """Create new."""
-        pass
-    
-    async def update(self, id: str, data: Dict[str, Any]) -> Optional[T]:
-        """Update existing."""
-        pass
-    
-    async def delete(self, id: str) -> bool:
-        """Delete existing."""
-        pass
-
-class MongoRepository(Repository[T], BaseRepository[T]):
-    """MongoDB repository implementation."""
-    
-    async def find_by_id(self, id: str) -> Optional[T]:
-        """Find by ID."""
-        return await self.find_one({"_id": id})
-    
-    async def find_all(self) -> List[T]:
-        """Find all."""
-        return await self.find_many({})
+    async def find_active_users(self) -> List[User]:
+        return await self.find_many({"status": "active"})
 ```
-
-## Advanced Usage
-
-### Transactions
-
-```python
-from earnbase_common.database import mongodb
-from motor.motor_asyncio import AsyncIOMotorClientSession
-
-async def transfer_money(
-    from_account: str,
-    to_account: str,
-    amount: float
-) -> bool:
-    """Transfer money between accounts."""
-    async with await mongodb.client.start_session() as session:
-        async with session.start_transaction():
-            try:
-                # Deduct from source
-                await mongodb.update_one(
-                    collection="accounts",
-                    query={"_id": from_account},
-                    update={"$inc": {"balance": -amount}},
-                    session=session
-                )
-                
-                # Add to destination
-                await mongodb.update_one(
-                    collection="accounts",
-                    query={"_id": to_account},
-                    update={"$inc": {"balance": amount}},
-                    session=session
-                )
-                
-                await session.commit_transaction()
-                return True
-                
-            except Exception as e:
-                await session.abort_transaction()
-                logger.error("transfer_failed", error=str(e))
-                return False
-```
-
-### Indexes
-
-```python
-from earnbase_common.database import mongodb
-
-# Create indexes
-await mongodb.create_index(
-    collection="users",
-    keys=[("email", 1)],
-    unique=True
-)
-
-await mongodb.create_index(
-    collection="orders",
-    keys=[
-        ("user_id", 1),
-        ("created_at", -1)
-    ],
-    background=True
-)
-
-# List indexes
-indexes = await mongodb.list_indexes("users")
-
-# Drop index
-await mongodb.drop_index("users", "email_1")
-```
-
-### Aggregation
-
-```python
-from earnbase_common.database import mongodb
-
-async def get_user_stats() -> Dict[str, Any]:
-    """Get user statistics."""
-    pipeline = [
-        {
-            "$group": {
-                "_id": "$status",
-                "count": {"$sum": 1},
-                "avg_age": {"$avg": "$age"}
-            }
-        },
-        {
-            "$project": {
-                "status": "$_id",
-                "count": 1,
-                "avg_age": 1,
-                "_id": 0
-            }
-        }
-    ]
-    
-    return await mongodb.db.users.aggregate(pipeline).to_list(None)
 ``` 

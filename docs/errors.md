@@ -2,86 +2,196 @@
 
 ## Overview
 
-The errors module provides a standardized way to handle errors across the application. It includes a hierarchy of error types, error handlers, and utilities for consistent error responses.
+The errors module provides a comprehensive error handling system for REST APIs built with FastAPI. It includes standardized error classes, error handlers, and consistent error response formats.
 
 ## Features
 
-### Error Types
+### Error Classes
+
+The module defines a hierarchy of error classes:
 
 ```python
 from earnbase_common.errors import (
-    APIError,
-    ValidationError,
-    AuthenticationError,
-    AuthorizationError,
-    NotFoundError,
-    ConflictError,
-    InternalError
+    APIError,  # Base class
+    AuthenticationError,  # 401 Unauthorized
+    AuthorizationError,  # 403 Forbidden
+    ValidationError,  # 400 Bad Request
+    NotFoundError,  # 404 Not Found
+    ConflictError,  # 409 Conflict
+    InternalError,  # 500 Internal Server Error
 )
 
-# Base API Error
-raise APIError(
-    message="Something went wrong",
-    code="ERROR",
-    status_code=500,
-    details={"key": "value"}
-)
-
-# Validation Error
-raise ValidationError(
-    message="Invalid input",
-    details={"field": "email", "error": "invalid format"}
-)
-
-# Authentication Error
-raise AuthenticationError(
-    message="Invalid credentials",
-    details={"reason": "expired token"}
-)
-
-# Authorization Error
-raise AuthorizationError(
-    message="Permission denied",
-    details={"required_role": "admin"}
-)
-
-# Not Found Error
+# Basic usage
 raise NotFoundError(
     message="User not found",
+    code="USER_NOT_FOUND",
     details={"user_id": "123"}
-)
-
-# Conflict Error
-raise ConflictError(
-    message="Email already exists",
-    details={"email": "user@example.com"}
-)
-
-# Internal Error
-raise InternalError(
-    message="Database connection failed",
-    details={"service": "mongodb"}
 )
 ```
 
 ### Error Handlers
 
+Built-in error handlers for FastAPI:
+
 ```python
 from earnbase_common.errors import register_error_handlers
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
+
+app = FastAPI()
 
 # Register all error handlers
+register_error_handlers(app)
+```
+
+## Error Response Format
+
+All errors follow a consistent JSON format:
+
+```json
+{
+    "error": {
+        "code": "ERROR_CODE",
+        "message": "Human readable message",
+        "details": {
+            // Optional error details
+        }
+    }
+}
+```
+
+## Error Types
+
+### 1. Authentication Error (401)
+
+Used for authentication failures:
+
+```python
+raise AuthenticationError(
+    message="Invalid credentials",
+    code="INVALID_CREDENTIALS",
+    details={"reason": "expired_token"}
+)
+```
+
+### 2. Authorization Error (403)
+
+Used for permission issues:
+
+```python
+raise AuthorizationError(
+    message="Permission denied",
+    code="INSUFFICIENT_PERMISSIONS",
+    details={"required_role": "admin"}
+)
+```
+
+### 3. Validation Error (400)
+
+Used for input validation failures:
+
+```python
+raise ValidationError(
+    message="Invalid input",
+    code="INVALID_INPUT",
+    details={
+        "fields": [
+            {
+                "field": "email",
+                "message": "Invalid email format",
+                "type": "value_error.email"
+            }
+        ]
+    }
+)
+```
+
+### 4. Not Found Error (404)
+
+Used when resources are not found:
+
+```python
+raise NotFoundError(
+    message="Resource not found",
+    code="RESOURCE_NOT_FOUND",
+    details={"resource_type": "user", "id": "123"}
+)
+```
+
+### 5. Conflict Error (409)
+
+Used for resource conflicts:
+
+```python
+raise ConflictError(
+    message="User already exists",
+    code="USER_EXISTS",
+    details={"email": "user@example.com"}
+)
+```
+
+### 6. Internal Error (500)
+
+Used for unexpected server errors:
+
+```python
+raise InternalError(
+    message="Database connection failed",
+    code="DB_CONNECTION_ERROR",
+    details={"db_host": "localhost"}
+)
+```
+
+## Error Handling
+
+### 1. Basic Error Handling
+
+```python
+from fastapi import FastAPI
+from earnbase_common.errors import NotFoundError, register_error_handlers
+
 app = FastAPI()
 register_error_handlers(app)
 
-# Custom error handler
+@app.get("/users/{user_id}")
+async def get_user(user_id: str):
+    user = await find_user(user_id)
+    if not user:
+        raise NotFoundError(
+            message="User not found",
+            code="USER_NOT_FOUND",
+            details={"user_id": user_id}
+        )
+    return user
+```
+
+### 2. Validation Error Handling
+
+The module automatically handles Pydantic validation errors:
+
+```python
+from pydantic import BaseModel, EmailStr
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    name: str
+
+@app.post("/users")
+async def create_user(user: UserCreate):
+    # Pydantic validation errors are automatically handled
+    # and converted to ValidationError responses
+    return await create_user_in_db(user)
+```
+
+### 3. Custom Error Handling
+
+You can add custom error handlers:
+
+```python
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
 @app.exception_handler(CustomError)
-async def custom_error_handler(
-    request: Request,
-    exc: CustomError
-) -> JSONResponse:
-    """Handle custom errors."""
+async def custom_error_handler(request: Request, exc: CustomError):
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -94,380 +204,30 @@ async def custom_error_handler(
     )
 ```
 
-### Error Response Format
-
-```python
-from earnbase_common.errors import create_error_response
-from typing import Dict, Any
-
-def create_api_error_response(
-    error: Exception
-) -> Dict[str, Any]:
-    """Create API error response."""
-    if isinstance(error, APIError):
-        return create_error_response(
-            status_code=error.status_code,
-            message=error.message,
-            code=error.code,
-            details=error.details
-        )
-    
-    # Default internal error
-    return create_error_response(
-        status_code=500,
-        message="Internal server error",
-        code="INTERNAL_ERROR"
-    )
-
-# Example response format
-{
-    "error": {
-        "code": "VALIDATION_ERROR",
-        "message": "Invalid input data",
-        "details": {
-            "fields": [
-                {
-                    "field": "email",
-                    "message": "Invalid email format",
-                    "type": "value_error"
-                }
-            ]
-        }
-    }
-}
-```
-
 ## Best Practices
 
-### 1. Error Hierarchy
+1. **Use Specific Error Types**:
+   - Choose the most specific error class for each case
+   - Include relevant details in the error response
+   - Use consistent error codes within your application
 
-```python
-from earnbase_common.errors import APIError
-from typing import Dict, Any, Optional
+2. **Error Logging**:
+   - All errors are automatically logged with details
+   - Include request_id in logs for tracing
+   - Log additional context when needed
 
-class DomainError(APIError):
-    """Base class for domain errors."""
-    
-    def __init__(
-        self,
-        message: str,
-        code: str = "DOMAIN_ERROR",
-        details: Optional[Dict[str, Any]] = None
-    ):
-        """Initialize domain error."""
-        super().__init__(
-            message=message,
-            code=code,
-            status_code=400,
-            details=details
-        )
+3. **Error Codes**:
+   - Use UPPERCASE_WITH_UNDERSCORES format
+   - Make codes descriptive and specific
+   - Document all error codes used in your API
 
-class UserError(DomainError):
-    """User domain errors."""
-    
-    def __init__(
-        self,
-        message: str,
-        code: str = "USER_ERROR",
-        details: Optional[Dict[str, Any]] = None
-    ):
-        """Initialize user error."""
-        super().__init__(
-            message=message,
-            code=code,
-            details=details
-        )
+4. **Error Messages**:
+   - Write clear, human-readable messages
+   - Include actionable information when possible
+   - Keep messages concise but informative
 
-# Usage
-class InvalidUserStateError(UserError):
-    """Invalid user state error."""
-    
-    def __init__(
-        self,
-        user_id: str,
-        current_state: str,
-        target_state: str
-    ):
-        """Initialize error."""
-        super().__init__(
-            message=f"Invalid state transition",
-            code="INVALID_USER_STATE",
-            details={
-                "user_id": user_id,
-                "current_state": current_state,
-                "target_state": target_state
-            }
-        )
-```
-
-### 2. Error Handling
-
-```python
-from earnbase_common.errors import (
-    NotFoundError,
-    ValidationError,
-    InternalError
-)
-from earnbase_common.logging import get_logger
-
-logger = get_logger(__name__)
-
-class UserService:
-    """User service with error handling."""
-    
-    async def get_user(self, user_id: str) -> User:
-        """Get user by ID."""
-        try:
-            user = await self.repository.find_one({"_id": user_id})
-            if not user:
-                raise NotFoundError(
-                    message="User not found",
-                    details={"user_id": user_id}
-                )
-            return user
-            
-        except DatabaseError as e:
-            logger.error(
-                "database_error",
-                operation="get_user",
-                user_id=user_id,
-                error=str(e)
-            )
-            raise InternalError(
-                message="Failed to get user",
-                details={"user_id": user_id}
-            )
-    
-    async def create_user(self, data: Dict[str, Any]) -> User:
-        """Create new user."""
-        try:
-            # Validate unique email
-            existing = await self.repository.find_one({
-                "email": data["email"]
-            })
-            if existing:
-                raise ValidationError(
-                    message="Email already exists",
-                    details={"email": data["email"]}
-                )
-            
-            return await self.repository.create(data)
-            
-        except ValidationError:
-            raise
-            
-        except Exception as e:
-            logger.error(
-                "create_user_failed",
-                data=data,
-                error=str(e)
-            )
-            raise InternalError(
-                message="Failed to create user"
-            )
-```
-
-### 3. Error Logging
-
-```python
-from earnbase_common.errors import APIError
-from earnbase_common.logging import get_logger
-from typing import Optional
-
-logger = get_logger(__name__)
-
-class ErrorLogger:
-    """Error logger with context."""
-    
-    def __init__(self, request: Request):
-        """Initialize logger."""
-        self.request = request
-        self.logger = logger
-    
-    def log_error(
-        self,
-        error: Exception,
-        context: Optional[Dict[str, Any]] = None
-    ) -> None:
-        """Log error with context."""
-        error_data = {
-            "error_type": error.__class__.__name__,
-            "error_message": str(error),
-            "request_id": self.request.state.request_id,
-            "path": self.request.url.path,
-            "method": self.request.method
-        }
-        
-        if isinstance(error, APIError):
-            error_data.update({
-                "error_code": error.code,
-                "error_details": error.details
-            })
-        
-        if context:
-            error_data.update(context)
-        
-        self.logger.error("request_error", **error_data)
-
-# Usage
-error_logger = ErrorLogger(request)
-try:
-    result = await process_request()
-except Exception as e:
-    error_logger.log_error(e, {"user_id": "123"})
-    raise
-```
-
-## Future Features
-
-The following features are planned for future releases:
-
-### 1. Error Recovery
-
-```python
-class ErrorRecovery:
-    """Error recovery strategies."""
-    
-    async def retry_with_backoff(
-        self,
-        operation: Callable,
-        max_retries: int = 3,
-        initial_delay: float = 1.0
-    ) -> Any:
-        """Retry operation with exponential backoff."""
-        pass
-    
-    async def circuit_breaker(
-        self,
-        operation: Callable,
-        failure_threshold: int = 5,
-        reset_timeout: int = 60
-    ) -> Any:
-        """Circuit breaker pattern."""
-        pass
-    
-    async def fallback_strategy(
-        self,
-        operation: Callable,
-        fallback: Callable
-    ) -> Any:
-        """Fallback on failure."""
-        pass
-```
-
-### 2. Error Aggregation
-
-```python
-class ErrorAggregator:
-    """Aggregate and analyze errors."""
-    
-    async def collect_errors(
-        self,
-        time_window: int
-    ) -> List[Dict[str, Any]]:
-        """Collect errors in time window."""
-        pass
-    
-    async def analyze_trends(
-        self,
-        error_type: str
-    ) -> Dict[str, Any]:
-        """Analyze error trends."""
-        pass
-    
-    async def generate_report(
-        self,
-        start_time: datetime,
-        end_time: datetime
-    ) -> Report:
-        """Generate error report."""
-        pass
-```
-
-### 3. Error Correlation
-
-```python
-class ErrorCorrelation:
-    """Correlate errors across services."""
-    
-    async def trace_error(
-        self,
-        error_id: str
-    ) -> List[Dict[str, Any]]:
-        """Trace error across services."""
-        pass
-    
-    async def find_related_errors(
-        self,
-        error: APIError
-    ) -> List[APIError]:
-        """Find related errors."""
-        pass
-    
-    async def build_error_chain(
-        self,
-        root_error: APIError
-    ) -> ErrorChain:
-        """Build chain of related errors."""
-        pass
-```
-
-### 4. Smart Error Messages
-
-```python
-class SmartErrorMessage:
-    """Generate smart error messages."""
-    
-    def translate_error(
-        self,
-        error: APIError,
-        language: str
-    ) -> str:
-        """Translate error message."""
-        pass
-    
-    def suggest_solution(
-        self,
-        error: APIError
-    ) -> str:
-        """Suggest solution for error."""
-        pass
-    
-    def format_for_user(
-        self,
-        error: APIError,
-        user_type: str
-    ) -> str:
-        """Format error for user type."""
-        pass
-```
-
-### 5. Error Metrics
-
-```python
-class ErrorMetrics:
-    """Collect error metrics."""
-    
-    async def track_error_rate(
-        self,
-        error_type: str,
-        window: int = 60
-    ) -> float:
-        """Track error rate."""
-        pass
-    
-    async def measure_impact(
-        self,
-        error: APIError
-    ) -> Dict[str, Any]:
-        """Measure error impact."""
-        pass
-    
-    async def alert_threshold(
-        self,
-        metric: str,
-        threshold: float
-    ) -> None:
-        """Set alert threshold."""
-        pass
+5. **Security Considerations**:
+   - Don't expose sensitive information in error details
+   - Use appropriate status codes for security-related errors
+   - Log security-related errors appropriately
 ``` 

@@ -2,366 +2,377 @@
 
 ## Overview
 
-The Security module provides comprehensive security features for FastAPI applications including:
-- Token management (JWT)
-- Password hashing and verification
-- Security policies
-- Session management
+The security module provides comprehensive security utilities including JWT token management, password hashing, and security policy configuration. It implements industry best practices for authentication, authorization, and data protection.
 
 ## Features
 
-### Security Policies
+### JWT Token Management
+
+The `TokenManager` class provides JWT token creation and verification:
 
 ```python
-from earnbase_common.security import SecurityPolicy
+from earnbase_common.security import JWTConfig, TokenManager
+from datetime import timedelta
 
-# Default security policies
-security_policy = SecurityPolicy(
-    # Password policies
-    PASSWORD_MIN_LENGTH=8,
-    PASSWORD_PATTERNS={
-        "uppercase": (r"[A-Z]", "Must contain uppercase letter"),
-        "lowercase": (r"[a-z]", "Must contain lowercase letter"),
-        "digit": (r"\d", "Must contain digit"),
-        "special": (r"[!@#$%^&*(),.?\":{}|<>]", "Must contain special character"),
-    },
-    
-    # Account policies
-    MAX_LOGIN_ATTEMPTS=5,
-    ACCOUNT_LOCKOUT_MINUTES=15,
-    
-    # Token policies
-    ACCESS_TOKEN_EXPIRE_MINUTES=30,
-    REFRESH_TOKEN_EXPIRE_DAYS=7,
-    VERIFICATION_TOKEN_EXPIRE_HOURS=24,
-    RESET_TOKEN_EXPIRE_HOURS=24,
-    
-    # Session policies
-    MAX_SESSIONS_PER_USER=5,
-    SESSION_IDLE_TIMEOUT_MINUTES=60,
-)
-```
-
-### Token Management
-
-```python
-from earnbase_common.security import TokenManager, JWTConfig
-
-# Initialize token manager
-token_manager = TokenManager(
-    config=JWTConfig(
-        secret_key="your-secret-key",
-        algorithm="HS256",
-        access_token_expire_minutes=30,
-        refresh_token_expire_days=7
-    )
+# Configure JWT
+config = JWTConfig(
+    secret_key="your-secret-key",
+    algorithm="HS256",
+    access_token_expire_minutes=30,
+    refresh_token_expire_days=7
 )
 
-# Create tokens
-access_token = token_manager.create_token(
-    data={"user_id": "123"},
+# Create token manager
+manager = TokenManager(config)
+
+# Create access token
+token = manager.create_token(
+    data={"user_id": "123", "role": "admin"},
     token_type="access"
 )
+print(token.value)      # JWT string
+print(token.expires_at) # Expiration datetime
 
-refresh_token = token_manager.create_token(
+# Create refresh token
+refresh = manager.create_token(
     data={"user_id": "123"},
     token_type="refresh"
 )
 
-# Verify tokens
+# Custom expiration
+custom_token = manager.create_token(
+    data={"user_id": "123"},
+    token_type="access",
+    expires_delta=timedelta(hours=1)
+)
+
+# Verify token
 try:
-    payload = token_manager.verify_token(
-        token=access_token.value,
+    payload = manager.verify_token(
+        token.value,
         expected_type="access"
     )
     user_id = payload["user_id"]
 except ValidationError as e:
-    print(f"Token validation failed: {e}")
+    print(e)  # Token has expired or is invalid
 ```
 
 ### Password Management
 
-```python
-from earnbase_common.security import hash_password, verify_password
+The `PasswordHasher` class handles secure password hashing and validation:
 
-# Hash password
-password = "MySecurePassword123!"
-hashed = hash_password(password)
+```python
+from earnbase_common.security import PasswordHasher
+
+# Create password hasher
+hasher = PasswordHasher()
+
+# Hash password with policy validation
+try:
+    hash_value = await hasher.hash("Weak")
+except ValidationError as e:
+    print(e)  # Password must be at least 8 characters long
+
+# Hash valid password
+hash_value = await hasher.hash("StrongP@ssw0rd")
+print(hash_value.value)  # Bcrypt hash
 
 # Verify password
-is_valid = verify_password(password, hashed)
+is_valid = await hasher.verify(
+    "StrongP@ssw0rd",
+    hash_value.value
+)
+print(is_valid)  # True
 ```
 
-## Best Practices
+### Security Policy
 
-### 1. Token Management
-
-```python
-from earnbase_common.security import TokenManager
-from datetime import timedelta
-
-class AuthService:
-    """Authentication service."""
-    
-    def __init__(self, token_manager: TokenManager):
-        self.token_manager = token_manager
-    
-    async def authenticate_user(self, username: str, password: str):
-        """Authenticate user and generate tokens."""
-        user = await self.verify_credentials(username, password)
-        
-        # Generate access token
-        access_token = self.token_manager.create_token(
-            data={
-                "user_id": str(user.id),
-                "username": user.username,
-                "roles": user.roles
-            },
-            token_type="access"
-        )
-        
-        # Generate refresh token with longer expiry
-        refresh_token = self.token_manager.create_token(
-            data={
-                "user_id": str(user.id),
-                "token_family": str(uuid4())  # For token rotation
-            },
-            token_type="refresh"
-        )
-        
-        return {
-            "access_token": access_token,
-            "refresh_token": refresh_token
-        }
-    
-    async def refresh_tokens(self, refresh_token: str):
-        """Refresh access token using refresh token."""
-        # Verify refresh token
-        payload = self.token_manager.verify_token(
-            token=refresh_token,
-            expected_type="refresh"
-        )
-        
-        # Generate new access token
-        new_access_token = self.token_manager.create_token(
-            data={
-                "user_id": payload["user_id"],
-                "username": payload["username"],
-                "roles": payload["roles"]
-            },
-            token_type="access"
-        )
-        
-        return new_access_token
-```
-
-### 2. Password Security
+The `SecurityPolicy` class defines security standards and constraints:
 
 ```python
 from earnbase_common.security import SecurityPolicy
-import re
 
-class PasswordValidator:
-    """Password validation."""
-    
-    def __init__(self, security_policy: SecurityPolicy):
-        self.policy = security_policy
-    
-    def validate_password(self, password: str) -> list[str]:
-        """Validate password against security policy."""
-        errors = []
-        
-        # Check length
-        if len(password) < self.policy.PASSWORD_MIN_LENGTH:
-            errors.append(
-                f"Password must be at least {self.policy.PASSWORD_MIN_LENGTH} characters"
+# Create custom policy
+policy = SecurityPolicy(
+    PASSWORD_MIN_LENGTH=10,
+    MAX_LOGIN_ATTEMPTS=3,
+    ACCESS_TOKEN_EXPIRE_MINUTES=15
+)
+
+# Password patterns
+patterns = policy.PASSWORD_PATTERNS
+print(patterns["uppercase"])  # (r"[A-Z]", "Must contain uppercase letter")
+
+# Account policies
+max_attempts = policy.MAX_LOGIN_ATTEMPTS        # 5
+lockout_time = policy.ACCOUNT_LOCKOUT_MINUTES  # 15
+
+# Token policies
+access_expire = policy.ACCESS_TOKEN_EXPIRE_MINUTES      # 30
+refresh_expire = policy.REFRESH_TOKEN_EXPIRE_DAYS       # 7
+verify_expire = policy.VERIFICATION_TOKEN_EXPIRE_HOURS  # 24
+reset_expire = policy.RESET_TOKEN_EXPIRE_HOURS         # 24
+
+# Session policies
+max_sessions = policy.MAX_SESSIONS_PER_USER          # 5
+idle_timeout = policy.SESSION_IDLE_TIMEOUT_MINUTES   # 60
+```
+
+## Key Features
+
+### 1. JWT Management
+
+- Token creation and verification
+- Access and refresh tokens
+- Custom expiration times
+- Token type validation
+- Secure signing algorithms
+
+### 2. Password Security
+
+- Bcrypt hashing
+- Policy validation
+- Pattern matching
+- Secure verification
+- Salt generation
+
+### 3. Security Policies
+
+- Password requirements
+- Account lockout
+- Token expiration
+- Session management
+- Configurable settings
+
+## Best Practices
+
+1. **Token Management**:
+   - Use short-lived access tokens
+   - Implement refresh token rotation
+   - Validate token types
+   - Handle expiration gracefully
+
+2. **Password Security**:
+   - Enforce strong password policies
+   - Use secure hashing algorithms
+   - Implement rate limiting
+   - Handle validation errors
+
+3. **Security Configuration**:
+   - Customize for your needs
+   - Follow industry standards
+   - Regular policy reviews
+   - Monitor security metrics
+
+4. **Error Handling**:
+   - Validate inputs thoroughly
+   - Provide clear error messages
+   - Log security events
+   - Handle edge cases
+
+## Examples
+
+### 1. Authentication Flow
+
+```python
+from earnbase_common.security import (
+    JWTConfig,
+    TokenManager,
+    PasswordHasher
+)
+from earnbase_common.errors import ValidationError
+
+class AuthService:
+    def __init__(self):
+        self.token_manager = TokenManager(
+            JWTConfig(secret_key="your-secret-key")
+        )
+        self.password_hasher = PasswordHasher()
+
+    async def register(self, email: str, password: str):
+        """Register new user."""
+        try:
+            # Hash password
+            hash_value = await self.password_hasher.hash(password)
+            
+            # Create user with hashed password
+            user = await create_user(email, hash_value.value)
+            
+            # Generate tokens
+            access_token = self.token_manager.create_token(
+                data={"user_id": user.id},
+                token_type="access"
             )
+            
+            refresh_token = self.token_manager.create_token(
+                data={"user_id": user.id},
+                token_type="refresh"
+            )
+            
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token
+            }
+            
+        except ValidationError as e:
+            raise ValueError(f"Registration failed: {str(e)}")
+
+    async def login(self, email: str, password: str):
+        """Login user."""
+        # Get user
+        user = await get_user_by_email(email)
+        if not user:
+            raise ValueError("User not found")
+            
+        # Verify password
+        is_valid = await self.password_hasher.verify(
+            password,
+            user.password_hash
+        )
+        if not is_valid:
+            raise ValueError("Invalid password")
+            
+        # Generate tokens
+        return {
+            "access_token": self.token_manager.create_token(
+                data={"user_id": user.id},
+                token_type="access"
+            ),
+            "refresh_token": self.token_manager.create_token(
+                data={"user_id": user.id},
+                token_type="refresh"
+            )
+        }
+```
+
+### 2. Password Reset
+
+```python
+from earnbase_common.security import TokenManager, PasswordHasher
+from datetime import timedelta
+
+class PasswordService:
+    def __init__(self):
+        self.token_manager = TokenManager(
+            JWTConfig(secret_key="your-secret-key")
+        )
+        self.password_hasher = PasswordHasher()
+
+    async def request_reset(self, email: str):
+        """Request password reset."""
+        user = await get_user_by_email(email)
+        if not user:
+            return  # Don't reveal user existence
+            
+        # Create reset token
+        reset_token = self.token_manager.create_token(
+            data={"user_id": user.id},
+            token_type="reset",
+            expires_delta=timedelta(hours=24)
+        )
         
-        # Check patterns
-        for pattern, (regex, message) in self.policy.PASSWORD_PATTERNS.items():
-            if not re.search(regex, password):
-                errors.append(message)
-        
-        return errors
+        # Send reset email
+        await send_reset_email(
+            email=user.email,
+            token=reset_token.value
+        )
+
+    async def reset_password(
+        self,
+        token: str,
+        new_password: str
+    ):
+        """Reset password with token."""
+        try:
+            # Verify token
+            payload = self.token_manager.verify_token(
+                token,
+                expected_type="reset"
+            )
+            
+            # Hash new password
+            hash_value = await self.password_hasher.hash(
+                new_password
+            )
+            
+            # Update password
+            await update_user_password(
+                user_id=payload["user_id"],
+                password_hash=hash_value.value
+            )
+            
+        except ValidationError as e:
+            raise ValueError(f"Password reset failed: {str(e)}")
 ```
 
 ### 3. Session Management
 
 ```python
-from earnbase_common.security import SecurityPolicy
-from datetime import datetime, timedelta
+from earnbase_common.security import TokenManager, SecurityPolicy
+from datetime import datetime
 
 class SessionManager:
-    """Session management."""
-    
-    def __init__(self, security_policy: SecurityPolicy):
-        self.policy = security_policy
-    
+    def __init__(self):
+        self.token_manager = TokenManager(
+            JWTConfig(secret_key="your-secret-key")
+        )
+        self.policy = SecurityPolicy()
+
     async def create_session(self, user_id: str):
         """Create new session."""
         # Check active sessions
-        active_sessions = await self.get_active_sessions(user_id)
-        if len(active_sessions) >= self.policy.MAX_SESSIONS_PER_USER:
-            # Remove oldest session
-            await self.remove_session(active_sessions[0].id)
-        
-        # Create new session
-        session = await self.store_session(
-            user_id=user_id,
-            expires_at=datetime.utcnow() + timedelta(
-                minutes=self.policy.SESSION_IDLE_TIMEOUT_MINUTES
-            )
+        active_sessions = await count_user_sessions(user_id)
+        if active_sessions >= self.policy.MAX_SESSIONS_PER_USER:
+            raise ValueError("Maximum sessions reached")
+            
+        # Create session token
+        session_token = self.token_manager.create_token(
+            data={
+                "user_id": user_id,
+                "session_id": generate_session_id()
+            },
+            token_type="session"
         )
         
-        return session
-    
-    async def validate_session(self, session_id: str):
-        """Validate session."""
-        session = await self.get_session(session_id)
+        # Store session
+        await store_session(
+            user_id=user_id,
+            token=session_token.value,
+            expires_at=session_token.expires_at
+        )
         
-        # Check expiry
-        if datetime.utcnow() > session.expires_at:
-            await self.remove_session(session_id)
-            return False
-        
-        # Update last activity
-        await self.update_session_activity(session_id)
-        return True
-```
+        return session_token
 
-## Future Features
-
-### 1. Multi-Factor Authentication
-
-```python
-from earnbase_common.security import MFAManager
-
-class MFAManager:
-    """Multi-factor authentication."""
-    
-    async def generate_totp_secret(self) -> str:
-        """Generate TOTP secret."""
-        pass
-    
-    async def verify_totp_code(
-        self,
-        secret: str,
-        code: str
-    ) -> bool:
-        """Verify TOTP code."""
-        pass
-    
-    async def generate_backup_codes(
-        self,
-        count: int = 10
-    ) -> list[str]:
-        """Generate backup codes."""
-        pass
-```
-
-### 2. Rate Limiting
-
-```python
-from earnbase_common.security import RateLimiter
-
-class RateLimiter:
-    """Rate limiting."""
-    
-    async def check_rate_limit(
-        self,
-        key: str,
-        limit: int,
-        window: int
-    ) -> bool:
-        """Check rate limit."""
-        pass
-    
-    async def increment_counter(
-        self,
-        key: str
-    ) -> None:
-        """Increment rate limit counter."""
-        pass
-```
-
-### 3. IP Filtering
-
-```python
-from earnbase_common.security import IPFilter
-
-class IPFilter:
-    """IP filtering."""
-    
-    async def add_whitelist(
-        self,
-        ip_range: str
-    ) -> None:
-        """Add IP range to whitelist."""
-        pass
-    
-    async def add_blacklist(
-        self,
-        ip_range: str
-    ) -> None:
-        """Add IP range to blacklist."""
-        pass
-    
-    async def check_ip(
-        self,
-        ip: str
-    ) -> bool:
-        """Check if IP is allowed."""
-        pass
-```
-
-### 4. Audit Logging
-
-```python
-from earnbase_common.security import AuditLogger
-
-class AuditLogger:
-    """Security audit logging."""
-    
-    async def log_auth_event(
-        self,
-        event_type: str,
-        user_id: str,
-        metadata: dict
-    ) -> None:
-        """Log authentication event."""
-        pass
-    
-    async def log_access_event(
-        self,
-        resource: str,
-        action: str,
-        user_id: str,
-        success: bool
-    ) -> None:
-        """Log resource access event."""
-        pass
-```
-
-### 5. Security Headers
-
-```python
-from earnbase_common.security import SecurityHeaders
-
-class SecurityHeaders:
-    """Security headers management."""
-    
-    def get_security_headers(self) -> dict:
-        """Get security headers."""
-        return {
-            "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "DENY",
-            "X-XSS-Protection": "1; mode=block",
-            "Content-Security-Policy": self.get_csp_policy(),
-            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-            "Referrer-Policy": "strict-origin-when-cross-origin"
-        }
-    
-    def get_csp_policy(self) -> str:
-        """Get Content Security Policy."""
-        pass
+    async def validate_session(self, token: str):
+        """Validate session token."""
+        try:
+            # Verify token
+            payload = self.token_manager.verify_token(
+                token,
+                expected_type="session"
+            )
+            
+            # Check session exists
+            session = await get_session(
+                user_id=payload["user_id"],
+                session_id=payload["session_id"]
+            )
+            if not session:
+                raise ValidationError("Session not found")
+                
+            # Check idle timeout
+            last_activity = session.last_activity
+            idle_minutes = (datetime.utcnow() - last_activity).seconds / 60
+            
+            if idle_minutes > self.policy.SESSION_IDLE_TIMEOUT_MINUTES:
+                await end_session(session.id)
+                raise ValidationError("Session expired")
+                
+            # Update last activity
+            await update_session_activity(session.id)
+            
+            return payload
+            
+        except ValidationError as e:
+            raise ValueError(f"Session validation failed: {str(e)}")
 ``` 

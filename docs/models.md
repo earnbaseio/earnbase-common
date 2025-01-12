@@ -2,16 +2,13 @@
 
 ## Overview
 
-The models module provides base classes for domain modeling using Pydantic with features like:
-- Base model with common functionality
-- Domain events for event-driven architecture
-- Aggregate roots for DDD (Domain-Driven Design)
-- Automatic timestamps and versioning
-- UUID generation
+The models module provides base classes for implementing Domain-Driven Design (DDD) patterns using Pydantic models. It includes support for entities, aggregate roots, and domain events.
 
 ## Features
 
-### Base Model
+### Base Models
+
+All models are built on Pydantic with enhanced functionality:
 
 ```python
 from earnbase_common.models import BaseModel
@@ -19,308 +16,353 @@ from datetime import datetime
 from typing import Optional
 
 class User(BaseModel):
-    """User model."""
-    
-    id: str
+    name: str
     email: str
-    name: Optional[str] = None
     created_at: datetime
-    
-    # Inherited features:
-    # - JSON serialization
-    # - Dictionary conversion
-    # - Datetime ISO format encoding
-    
-# Usage
+    status: Optional[str] = None
+
+# Models are immutable by default
 user = User(
-    id="123",
-    email="user@example.com",
+    name="John",
+    email="john@example.com",
     created_at=datetime.utcnow()
 )
-
-# Convert to dict
-user_dict = user.to_dict()
-```
-
-### Domain Events
-
-```python
-from earnbase_common.models import DomainEvent
-from typing import Dict, Any
-
-class UserCreated(DomainEvent):
-    """Event emitted when a user is created."""
-    
-    user_id: str
-    email: str
-    
-    # Automatic fields:
-    # - event_id: UUID
-    # - event_type: Class name
-    # - timestamp: UTC now
-    # - version: "1.0"
-
-# Usage
-event = UserCreated(
-    user_id="123",
-    email="user@example.com"
-)
-
-print(event.to_dict())
-{
-    "event_id": "550e8400-e29b-41d4-a716-446655440000",
-    "event_type": "UserCreated",
-    "timestamp": "2024-01-11T10:30:45.123Z",
-    "version": "1.0",
-    "user_id": "123",
-    "email": "user@example.com"
-}
 ```
 
 ### Aggregate Root
 
+Base class for aggregate roots with event management:
+
 ```python
 from earnbase_common.models import AggregateRoot, DomainEvent
-from typing import List, Optional
+from uuid import UUID
+from datetime import datetime
 
 class OrderCreated(DomainEvent):
-    """Order created event."""
     order_id: str
     total_amount: float
 
-class OrderItem(BaseModel):
-    """Order item model."""
-    product_id: str
-    quantity: int
-    price: float
-
 class Order(AggregateRoot):
-    """Order aggregate root."""
-    
     customer_id: str
-    items: List[OrderItem]
-    total_amount: float
+    total: float
     status: str = "pending"
-    
-    # Automatic fields:
-    # - id: UUID
-    # - created_at: UTC now
-    # - updated_at: UTC now
-    # - version: 1
-    
-    def add_item(self, item: OrderItem) -> None:
-        """Add item to order."""
-        self.items.append(item)
-        self.total_amount += item.price * item.quantity
-        self.version += 1
-        self.updated_at = datetime.utcnow()
+
+    def place(self) -> None:
+        """Place the order."""
+        self.status = "placed"
         
         # Add domain event
-        self.add_event(OrderCreated(
-            order_id=self.id,
-            total_amount=self.total_amount
-        ))
+        self.add_event(
+            OrderCreated(
+                event_type="OrderCreated",
+                aggregate_id=str(self.id),
+                aggregate_type="Order",
+                order_id=str(self.id),
+                total_amount=self.total
+            )
+        )
+        
+        # Update version
+        self.increment_version()
 
-# Usage
-order = Order(
-    customer_id="123",
-    items=[],
-    total_amount=0
+# Create and place order
+order = Order(customer_id="123", total=100.0)
+order.place()
+
+# Access events
+print(order.events)  # [OrderCreated(...)]
+print(order.version)  # 2
+```
+
+### Domain Events
+
+Base class for domain events:
+
+```python
+from earnbase_common.models import DomainEvent
+from datetime import datetime
+from typing import Optional, Dict, Any
+
+class UserCreated(DomainEvent):
+    user_id: str
+    email: str
+    metadata: Optional[Dict[str, Any]] = None
+
+# Create event
+event = UserCreated(
+    event_type="UserCreated",
+    aggregate_id="user-123",
+    aggregate_type="User",
+    user_id="user-123",
+    email="user@example.com",
+    metadata={"source": "api"}
 )
 
-# Add item and track changes
-order.add_item(OrderItem(
-    product_id="456",
-    quantity=2,
-    price=9.99
-))
+print(event.timestamp)  # 2024-01-12T00:00:00Z
+print(event.version)    # 1
+```
 
-# Get and clear events
-events = order.clear_events()
+## Key Features
+
+### 1. Immutability
+
+All models are immutable by default:
+
+```python
+from earnbase_common.models import BaseModel
+
+class Product(BaseModel):
+    name: str
+    price: float
+
+product = Product(name="Phone", price=999.99)
+# This will raise an error:
+# product.price = 899.99
+```
+
+### 2. Event Sourcing
+
+Support for event sourcing pattern:
+
+```python
+class Account(AggregateRoot):
+    balance: float = 0.0
+
+    def deposit(self, amount: float) -> None:
+        """Deposit money."""
+        self.balance += amount
+        self.add_event(
+            MoneyDeposited(
+                event_type="MoneyDeposited",
+                aggregate_id=str(self.id),
+                aggregate_type="Account",
+                amount=amount
+            )
+        )
+        self.increment_version()
+
+    def withdraw(self, amount: float) -> None:
+        """Withdraw money."""
+        if amount > self.balance:
+            raise ValueError("Insufficient funds")
+            
+        self.balance -= amount
+        self.add_event(
+            MoneyWithdrawn(
+                event_type="MoneyWithdrawn",
+                aggregate_id=str(self.id),
+                aggregate_type="Account",
+                amount=amount
+            )
+        )
+        self.increment_version()
+```
+
+### 3. Version Control
+
+Automatic version management:
+
+```python
+class Document(AggregateRoot):
+    content: str
+
+    def update_content(self, new_content: str) -> None:
+        """Update document content."""
+        self.content = new_content
+        self.add_event(
+            ContentUpdated(
+                event_type="ContentUpdated",
+                aggregate_id=str(self.id),
+                aggregate_type="Document",
+                new_content=new_content
+            )
+        )
+        self.increment_version()
+
+doc = Document(content="Initial content")
+print(doc.version)  # 1
+
+doc.update_content("Updated content")
+print(doc.version)  # 2
+print(doc.updated_at)  # 2024-01-12T00:00:00Z
 ```
 
 ## Best Practices
 
-### 1. Model Validation
+1. **Model Design**:
+   - Keep models focused and cohesive
+   - Use value objects for complex attributes
+   - Follow DDD principles
+   - Keep aggregates small
+
+2. **Event Design**:
+   - Make events immutable
+   - Include all relevant data
+   - Use meaningful event names
+   - Version events appropriately
+
+3. **Aggregate Design**:
+   - Maintain consistency boundaries
+   - Handle concurrency with versions
+   - Keep event history clean
+   - Use meaningful aggregate IDs
+
+4. **Performance**:
+   - Be mindful of event payload size
+   - Clear events after processing
+   - Use appropriate data types
+   - Consider event storage strategy
+
+## Examples
+
+### 1. E-commerce Order
 
 ```python
-from pydantic import Field, validator
+from earnbase_common.models import AggregateRoot, DomainEvent
+from typing import List, Optional
 from decimal import Decimal
 
-class Product(BaseModel):
-    """Product model with validation."""
-    
-    name: str = Field(..., min_length=1, max_length=100)
-    price: Decimal = Field(..., ge=0)
-    stock: int = Field(..., ge=0)
-    
-    @validator("name")
-    def validate_name(cls, v: str) -> str:
-        """Validate product name."""
-        if not v.strip():
-            raise ValueError("Name cannot be empty")
-        return v.strip()
-```
+class OrderItem:
+    product_id: str
+    quantity: int
+    price: Decimal
 
-### 2. Value Objects
+class Order(AggregateRoot):
+    customer_id: str
+    items: List[OrderItem]
+    total: Decimal
+    status: str = "draft"
+    shipping_address: Optional[str] = None
 
-```python
-from pydantic import EmailStr
-from typing import NewType
-
-# Simple value objects
-UserId = NewType("UserId", str)
-OrderId = NewType("OrderId", str)
-
-# Complex value objects
-class Email(BaseModel):
-    """Email value object."""
-    value: EmailStr
-    verified: bool = False
-    
-    def __str__(self) -> str:
-        return self.value
-
-class Money(BaseModel):
-    """Money value object."""
-    amount: Decimal
-    currency: str = "USD"
-    
-    def __add__(self, other: "Money") -> "Money":
-        if self.currency != other.currency:
-            raise ValueError("Cannot add different currencies")
-        return Money(
-            amount=self.amount + other.amount,
-            currency=self.currency
+    def add_item(self, item: OrderItem) -> None:
+        """Add item to order."""
+        self.items.append(item)
+        self.total += item.price * item.quantity
+        
+        self.add_event(
+            ItemAdded(
+                event_type="ItemAdded",
+                aggregate_id=str(self.id),
+                aggregate_type="Order",
+                item=item
+            )
         )
+        self.increment_version()
+
+    def checkout(self, shipping_address: str) -> None:
+        """Checkout order."""
+        if not self.items:
+            raise ValueError("Order is empty")
+            
+        self.shipping_address = shipping_address
+        self.status = "pending"
+        
+        self.add_event(
+            OrderCheckedOut(
+                event_type="OrderCheckedOut",
+                aggregate_id=str(self.id),
+                aggregate_type="Order",
+                shipping_address=shipping_address
+            )
+        )
+        self.increment_version()
 ```
 
-### 3. Event Sourcing
+### 2. User Management
 
 ```python
-class EventSourced(AggregateRoot):
-    """Base class for event-sourced aggregates."""
-    
-    def apply_event(self, event: DomainEvent) -> None:
-        """Apply event to aggregate."""
-        method = f"apply_{event.event_type}"
-        if hasattr(self, method):
-            getattr(self, method)(event)
-    
-    def load_from_history(
+class User(AggregateRoot):
+    email: str
+    status: str = "active"
+    login_attempts: int = 0
+
+    def deactivate(self, reason: str) -> None:
+        """Deactivate user."""
+        if self.status == "inactive":
+            raise ValueError("User already inactive")
+            
+        self.status = "inactive"
+        
+        self.add_event(
+            UserDeactivated(
+                event_type="UserDeactivated",
+                aggregate_id=str(self.id),
+                aggregate_type="User",
+                reason=reason
+            )
+        )
+        self.increment_version()
+
+    def record_login_attempt(self, success: bool) -> None:
+        """Record login attempt."""
+        if not success:
+            self.login_attempts += 1
+            
+            if self.login_attempts >= 3:
+                self.status = "locked"
+                
+                self.add_event(
+                    UserLocked(
+                        event_type="UserLocked",
+                        aggregate_id=str(self.id),
+                        aggregate_type="User",
+                        attempts=self.login_attempts
+                    )
+                )
+                
+        else:
+            self.login_attempts = 0
+            
+        self.increment_version()
+```
+
+### 3. Content Management
+
+```python
+class Article(AggregateRoot):
+    title: str
+    content: str
+    status: str = "draft"
+    published_at: Optional[datetime] = None
+
+    def publish(self) -> None:
+        """Publish article."""
+        if self.status == "published":
+            raise ValueError("Article already published")
+            
+        self.status = "published"
+        self.published_at = datetime.utcnow()
+        
+        self.add_event(
+            ArticlePublished(
+                event_type="ArticlePublished",
+                aggregate_id=str(self.id),
+                aggregate_type="Article",
+                published_at=self.published_at
+            )
+        )
+        self.increment_version()
+
+    def update_content(
         self,
-        events: List[DomainEvent]
+        title: Optional[str] = None,
+        content: Optional[str] = None
     ) -> None:
-        """Load aggregate from event history."""
-        for event in events:
-            self.apply_event(event)
-            self.version += 1
+        """Update article content."""
+        if title:
+            self.title = title
+        if content:
+            self.content = content
+            
+        self.add_event(
+            ContentUpdated(
+                event_type="ContentUpdated",
+                aggregate_id=str(self.id),
+                aggregate_type="Article",
+                title=title,
+                content=content
+            )
+        )
+        self.increment_version()
 ```
-
-## Future Features
-
-### 1. Schema Evolution
-
-```python
-class VersionedModel(BaseModel):
-    """Model with schema versioning."""
-    
-    def migrate_from(
-        self,
-        old_version: int,
-        data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Migrate data from old version."""
-        pass
-    
-    def migrate_to(
-        self,
-        new_version: int,
-        data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Migrate data to new version."""
-        pass
-```
-
-### 2. Model Relationships
-
-```python
-class Relationship:
-    """Define model relationships."""
-    
-    def __init__(
-        self,
-        model: Type[BaseModel],
-        lazy: bool = True
-    ):
-        """Initialize relationship."""
-        pass
-
-class User(BaseModel):
-    """User model with relationships."""
-    
-    id: str
-    orders: Relationship["Order"]
-    profile: Relationship["Profile"]
-```
-
-### 3. Change Tracking
-
-```python
-class TrackedModel(BaseModel):
-    """Model with change tracking."""
-    
-    def get_changes(self) -> Dict[str, Any]:
-        """Get changed fields."""
-        pass
-    
-    def has_changes(self) -> bool:
-        """Check if model has changes."""
-        pass
-    
-    def reset_changes(self) -> None:
-        """Reset change tracking."""
-        pass
-```
-
-### 4. Model Inheritance
-
-```python
-class InheritanceModel(BaseModel):
-    """Model with inheritance support."""
-    
-    type: str = Field(discriminator=True)
-    
-    @classmethod
-    def get_concrete_model(
-        cls,
-        type: str
-    ) -> Type[BaseModel]:
-        """Get concrete model class."""
-        pass
-```
-
-### 5. Model Validation Rules
-
-```python
-class ValidationRule:
-    """Custom validation rule."""
-    
-    def validate(
-        self,
-        value: Any,
-        field: str
-    ) -> None:
-        """Validate value."""
-        pass
-
-class BusinessRule:
-    """Business rule validator."""
-    
-    def validate(
-        self,
-        model: BaseModel
-    ) -> None:
-        """Validate business rule."""
-        pass
 ``` 
